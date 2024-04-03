@@ -2,7 +2,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 
 # TODO set to True to show graphs
-show_graphs = False
+show_sample_graphs = False
 
 
 def plot_feature(feat, feat_name, snip_meta):
@@ -14,9 +14,17 @@ def plot_feature(feat, feat_name, snip_meta):
     :param snip_meta: snippet metadata (including label)
     """
     plt.title(snip_meta[3] + ' - ' + feat_name)  # use recording label as title
-    plt.xlabel("t")
-    plt.ylabel("value")
+    plt.xlabel('t')
+    plt.ylabel('value')
     plt.plot(np.arange(0, len(feat)), feat)
+    plt.show()
+
+
+def plot_spectrogram(data, feat_name, snip_meta):
+    plt.title(snip_meta[3] + ' - ' + feat_name)  # use recording label as title
+    plt.xlabel('t')
+    plt.ylabel('frequency bin')
+    plt.pcolormesh(data, shading='auto')
     plt.show()
 
 
@@ -25,9 +33,13 @@ label_metadata = np.genfromtxt('metadata/development.csv', dtype=None, delimiter
 idx_to_feature = np.loadtxt('metadata/idx_to_feature_name.csv', delimiter=',', usecols=1, skiprows=1, dtype='U')
 data = np.load('development_numpy/development.npy')
 
-# plot features of a single audio snippet
+# plot every feature of a single audio snippet
 # (just for showcasing purposes, so you can get an idea what the data looks like)
 sample_idx = 0
 for feat_idx, feat in enumerate(data[sample_idx]):
-    if show_graphs:
+    if show_sample_graphs:
         plot_feature(feat, idx_to_feature[feat_idx], label_metadata[sample_idx])
+
+# plot mel-spectrogram of first audio snippet
+# mel-spectrogram data is from idx 12 to 75
+plot_spectrogram(data[sample_idx][12:75], 'mel-spectrogram', label_metadata[sample_idx])
