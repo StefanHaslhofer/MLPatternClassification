@@ -1,3 +1,7 @@
+development_numpy/
+metadata/
+MLPC24_speech_commands_raw_waveforms/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
