@@ -43,3 +43,15 @@ for feat_idx, feat in enumerate(data[sample_idx]):
 # plot mel-spectrogram of first audio snippet
 # mel-spectrogram data is from idx 12 to 75
 plot_spectrogram(data[sample_idx][12:75], 'mel-spectrogram', label_metadata[sample_idx])
+
+# 1a) check if there are inconsistencies in the audio by comparing file path and assigned label
+false_count = 0
+for l in label_metadata:
+    value = str(l[1]).split('/')[1]
+    label = l[3]
+    if value != label:
+        false_count = false_count + 1
+
+# compare energy of a silent and a loud recording
+plot_feature(data[26606][9], idx_to_feature[9], label_metadata[26606])
+plot_feature(data[28049][9], idx_to_feature[9], label_metadata[28049])
