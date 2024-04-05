@@ -13,6 +13,7 @@ def plot_feature(feat, feat_name, snip_meta):
     :param feat_name: name of feature
     :param snip_meta: snippet metadata (including label)
     """
+    plt.rcParams.update({'font.size': 14})
     plt.title(snip_meta[3] + ' - ' + feat_name)  # use recording label as title
     plt.xlabel('t')
     plt.ylabel('value')
