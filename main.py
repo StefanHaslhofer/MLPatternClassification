@@ -57,5 +57,8 @@ for l in label_metadata:
 # compare energy of a silent and a loud recording
 plot_feature(data[26606][9], idx_to_feature[9], label_metadata[26606])
 plot_feature(data[26606][172], idx_to_feature[172], label_metadata[26606])
+# standard deviation for feature with index 9
+std = np.sqrt(np.mean(data[26606][9]))
+
 plot_feature(data[3000][9], idx_to_feature[9], label_metadata[3000])
 plot_feature(data[3000][172], idx_to_feature[172], label_metadata[3000])
