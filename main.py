@@ -1,5 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
+import pandas as pd
 
 # TODO set to True to show graphs
 show_sample_graphs = False
@@ -26,6 +27,18 @@ def plot_spectrogram(data, feat_name, snip_meta):
     plt.xlabel('t')
     plt.ylabel('frequency bin')
     plt.pcolormesh(data, shading='auto')
+    plt.show()
+
+
+def plot_features(std, speaker_id):
+    plt.rcParams.update({'font.size': 16})
+    plt.figure(figsize=(10, 6))  # Adjust figure size as needed
+    plt.bar(range(len(std)), std),  # tick_label=feature_names)
+    plt.xlabel('feature id')
+    plt.ylabel('standard deviation')
+    plt.title('standard deviation of speaker ' + str(speaker_id))
+    plt.xticks(rotation=90)  # Rotate x-axis labels for better readability
+    plt.tight_layout()  # Adjust layout to prevent overlapping labels
     plt.show()
 
 
@@ -62,3 +75,25 @@ std = np.std(data[26606][9])
 
 plot_feature(data[3000][9], idx_to_feature[9], label_metadata[3000])
 plot_feature(data[3000][172], idx_to_feature[172], label_metadata[3000])
+
+# quiet
+speaker_1_idx = [i[0] for i in list(filter(lambda x: x[2] == 3, label_metadata))]
+# loud
+speaker_2_idx = [i[0] for i in list(filter(lambda x: x[2] == 14, label_metadata))]
+
+speaker_1 = data[speaker_1_idx]
+speaker_2 = data[speaker_2_idx]
+
+downsampled_data_1 = np.mean(speaker_1, axis=2)
+downsampled_data_2 = np.mean(speaker_2, axis=2)
+
+std_1 = np.std(downsampled_data_1, axis=0)
+std_2 = np.std(downsampled_data_2, axis=0)
+
+plot_features(std_1, 3)
+plot_features(std_2, 14)
+
+# 10 = German speaker
+
+
+None

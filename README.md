@@ -7,7 +7,7 @@
    * enter following commands:
     ```
     python -m venv venv
-    venv/bin/activate
+    venv/Scripts/activate
     ```
 3. install python requirements
     ```
