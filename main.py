@@ -1,4 +1,5 @@
 import numpy as np
+import random
 from matplotlib import pyplot as plt
 import pandas as pd
 
@@ -47,6 +48,34 @@ label_metadata = np.genfromtxt('metadata/development.csv', dtype=None, delimiter
 idx_to_feature = np.loadtxt('metadata/idx_to_feature_name.csv', delimiter=',', usecols=1, skiprows=1, dtype='U')
 data = np.load('development_numpy/development.npy')
 
+
+def get_data_for_speakers(speaker_ids):
+    """
+    get all recording data by speaker id
+
+    :param speaker_ids: fold of speakers
+    :return: recordings id
+    """
+    metadata_idx = list(filter(lambda el: np.isin(el[2], speaker_ids), label_metadata))
+    return []
+
+
+"""
+TASK 3: Classification
+"""
+# 1. split data into n sub-sets
+# get unique speaker ids from metadata
+speaker_ids = np.unique([el[2] for el in label_metadata])
+# random shuffle
+random.shuffle(speaker_ids)
+# split speaker ids into 10 folds
+speaker_splits_ids = np.array_split(speaker_ids, 10)
+# get the recording of the speaker ids of each of the 10 folds
+recording_folds = []
+for fold in speaker_splits_ids:
+    recording_folds.append(get_data_for_speakers(fold))
+
+
 # plot every feature of a single audio snippet
 # (just for showcasing purposes, so you can get an idea what the data looks like)
 sample_idx = 0
@@ -59,41 +88,8 @@ for feat_idx, feat in enumerate(data[sample_idx]):
 plot_spectrogram(data[sample_idx][12:75], 'mel-spectrogram', label_metadata[sample_idx])
 plot_spectrogram(data[sample_idx][76:107], 'mfcc-spectrogram', label_metadata[sample_idx])
 
-# 1a) check if there are inconsistencies in the audio by comparing file path and assigned label
-false_count = 0
-for l in label_metadata:
-    value = str(l[1]).split('/')[1]
-    label = l[3]
-    if value != label:
-        false_count = false_count + 1
-
 # compare energy of a silent and a loud recording
 plot_feature(data[26606][9], idx_to_feature[9], label_metadata[26606])
 plot_feature(data[26606][172], idx_to_feature[172], label_metadata[26606])
-# standard deviation for feature with index 9
-std = np.std(data[26606][9])
-
-plot_feature(data[3000][9], idx_to_feature[9], label_metadata[3000])
-plot_feature(data[3000][172], idx_to_feature[172], label_metadata[3000])
-
-# quiet
-speaker_1_idx = [i[0] for i in list(filter(lambda x: x[2] == 3, label_metadata))]
-# loud
-speaker_2_idx = [i[0] for i in list(filter(lambda x: x[2] == 14, label_metadata))]
-
-speaker_1 = data[speaker_1_idx]
-speaker_2 = data[speaker_2_idx]
-
-downsampled_data_1 = np.mean(speaker_1, axis=2)
-downsampled_data_2 = np.mean(speaker_2, axis=2)
-
-std_1 = np.std(downsampled_data_1, axis=0)
-std_2 = np.std(downsampled_data_2, axis=0)
-
-plot_features(std_1, 3)
-plot_features(std_2, 14)
-
-# 10 = German speaker
-
 
 None
