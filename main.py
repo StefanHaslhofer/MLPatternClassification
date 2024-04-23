@@ -77,7 +77,7 @@ speaker_splits_ids = np.array_split(speaker_ids, n)
 # get the recording of the speaker ids of each of the 10 folds
 recording_folds = []
 for fold_idx, fold in enumerate(speaker_splits_ids):
-    print("get speaker data for fold {}/{}".format(fold_idx, n))
+    print("get speaker data for fold {}/{}".format(fold_idx + 1, n))
     recording_folds.append(get_data_for_speakers(fold))
 
 
