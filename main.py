@@ -56,20 +56,24 @@ def get_data_for_speakers(speaker_ids):
     :param speaker_ids: fold of speakers
     :return: recordings id
     """
-    metadata_idx = list(filter(lambda el: np.isin(el[2], speaker_ids), label_metadata))
-    return []
+    metadata = list(filter(lambda el: np.isin(el[2], speaker_ids), label_metadata))
+    # metadata elements at index 0 = indices of recordings
+    recording_ids = [el[0] for el in metadata]
+    # get recording data by list of indices
+    return data[recording_ids]
 
 
 """
 TASK 3: Classification
 """
 # 1. split data into n sub-sets
+n = 10
 # get unique speaker ids from metadata
 speaker_ids = np.unique([el[2] for el in label_metadata])
 # random shuffle
 random.shuffle(speaker_ids)
 # split speaker ids into 10 folds
-speaker_splits_ids = np.array_split(speaker_ids, 10)
+speaker_splits_ids = np.array_split(speaker_ids, n)
 # get the recording of the speaker ids of each of the 10 folds
 recording_folds = []
 for fold in speaker_splits_ids:
