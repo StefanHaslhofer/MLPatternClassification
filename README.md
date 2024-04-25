@@ -13,3 +13,6 @@
     ```
     pip install -r requirements.txt
     ```
+<br>
+<br>
+Package python_speech_features has to be installed with pip, does not work with conda. So use pip install python_speech_features. 

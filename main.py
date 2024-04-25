@@ -2,6 +2,8 @@ import numpy as np
 import random
 from matplotlib import pyplot as plt
 import pandas as pd
+import scipy.io.wavfile as wav
+from python_speech_features import mfcc
 
 # TODO set to True to show graphs
 show_sample_graphs = False
@@ -44,11 +46,15 @@ def plot_features(std, speaker_id):
 
 
 # load from data files provided on moodle
-label_metadata = np.genfromtxt('metadata/development.csv', dtype=None, delimiter=',', names=True, encoding='utf-8')
-idx_to_feature = np.loadtxt('metadata/idx_to_feature_name.csv', delimiter=',', usecols=1, skiprows=1, dtype='U')
-data = np.load('development_numpy/development.npy')
+try:
+    label_metadata = np.genfromtxt('metadata/development.csv', dtype=None, delimiter=',', names=True, encoding='utf-8')
+    idx_to_feature = np.loadtxt('metadata/idx_to_feature_name.csv', delimiter=',', usecols=1, skiprows=1, dtype='U')
+    data = np.load('development_numpy/development.npy')
+except Exception as e:
+    print(f"Failed to load data: {e}")
+    raise
 
-
+'''
 def get_data_for_speakers(speaker_ids):
     """
     get all recording data by speaker id
@@ -61,24 +67,31 @@ def get_data_for_speakers(speaker_ids):
     recording_ids = [el[0] for el in metadata]
     # get recording data by list of indices
     return data[recording_ids]
+'''
+
 
 # Second version of get_data_for_speakers, should be more efficient
-"""
 def get_data_for_speakers(speaker_ids):
+    """
     Retrieve all recording data for a specified array of speaker IDs.
 
     :param speaker_ids: Array of speaker IDs.
     :return: Array of recordings corresponding to the speaker IDs.
-    
-    condition = np.isin(label_metadata['speaker_id'], speaker_ids)
-    recording_ids = label_metadata['id'][condition]
-    return data[recording_ids]
-"""
+    """
+    try:
+        condition = np.isin(label_metadata['speaker_id'], speaker_ids)
+        recording_ids = label_metadata['id'][condition]
+        return data[recording_ids]
+    except IndexError:
+        print("Error: Speaker ID not found in dataset.")
+        return np.array([])
+
 
 
 """
 TASK 3: Classification
 """
+'''
 # 1. split data into n sub-sets
 n = 10
 # get unique speaker ids from metadata
@@ -92,10 +105,9 @@ recording_folds = []
 for fold_idx, fold in enumerate(speaker_splits_ids):
     print("get speaker data for fold {}/{}".format(fold_idx + 1, n))
     recording_folds.append(get_data_for_speakers(fold))
-
+'''
 
 # Second version of splitting data into n sub-sets
-"""
 n = 10
 speaker_ids = np.unique(label_metadata['speaker_id']) 
 np.random.shuffle(speaker_ids)
@@ -107,7 +119,6 @@ for fold_idx, fold in enumerate(speaker_splits_ids):
     fold_data = get_data_for_speakers(fold)
     recording_folds.append(fold_data)
     print(f"Retrieved {len(fold_data)} samples.")
-"""
 
 
 # plot every feature of a single audio snippet
@@ -125,5 +136,3 @@ plot_spectrogram(data[sample_idx][76:107], 'mfcc-spectrogram', label_metadata[sa
 # compare energy of a silent and a loud recording
 plot_feature(data[26606][9], idx_to_feature[9], label_metadata[26606])
 plot_feature(data[26606][172], idx_to_feature[172], label_metadata[26606])
-
-None
