@@ -62,6 +62,19 @@ def get_data_for_speakers(speaker_ids):
     # get recording data by list of indices
     return data[recording_ids]
 
+# Second version of get_data_for_speakers, should be more efficient
+"""
+def get_data_for_speakers(speaker_ids):
+    Retrieve all recording data for a specified array of speaker IDs.
+
+    :param speaker_ids: Array of speaker IDs.
+    :return: Array of recordings corresponding to the speaker IDs.
+    
+    condition = np.isin(label_metadata['speaker_id'], speaker_ids)
+    recording_ids = label_metadata['id'][condition]
+    return data[recording_ids]
+"""
+
 
 """
 TASK 3: Classification
@@ -79,6 +92,22 @@ recording_folds = []
 for fold_idx, fold in enumerate(speaker_splits_ids):
     print("get speaker data for fold {}/{}".format(fold_idx + 1, n))
     recording_folds.append(get_data_for_speakers(fold))
+
+
+# Second version of splitting data into n sub-sets
+"""
+n = 10
+speaker_ids = np.unique(label_metadata['speaker_id']) 
+np.random.shuffle(speaker_ids)
+speaker_splits_ids = np.array_split(speaker_ids, n)
+
+recording_folds = []
+for fold_idx, fold in enumerate(speaker_splits_ids):
+    print(f"Retrieving speaker data for fold {fold_idx + 1}/{n}")
+    fold_data = get_data_for_speakers(fold)
+    recording_folds.append(fold_data)
+    print(f"Retrieved {len(fold_data)} samples.")
+"""
 
 
 # plot every feature of a single audio snippet
