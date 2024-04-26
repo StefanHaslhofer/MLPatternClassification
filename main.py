@@ -2,8 +2,11 @@ import numpy as np
 import random
 from matplotlib import pyplot as plt
 import pandas as pd
-import scipy.io.wavfile as wav
-from python_speech_features import mfcc
+from sklearn import svm
+from sklearn.model_selection import KFold
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+from tqdm import tqdm
 
 # TODO set to True to show graphs
 show_sample_graphs = False
@@ -91,6 +94,7 @@ def get_data_for_speakers(speaker_ids):
 """
 TASK 3: Classification
 """
+
 '''
 # 1. split data into n sub-sets
 n = 10
@@ -128,11 +132,52 @@ for feat_idx, feat in enumerate(data[sample_idx]):
     if show_sample_graphs:
         plot_feature(feat, idx_to_feature[feat_idx], label_metadata[sample_idx])
 
-# plot mel-spectrogram of first audio snippet
-# mel-spectrogram data is from idx 12 to 75
-plot_spectrogram(data[sample_idx][12:75], 'mel-spectrogram', label_metadata[sample_idx])
-plot_spectrogram(data[sample_idx][76:107], 'mfcc-spectrogram', label_metadata[sample_idx])
+        # plot mel-spectrogram of first audio snippet
+        # mel-spectrogram data is from idx 12 to 75
+        plot_spectrogram(data[sample_idx][12:75], 'mel-spectrogram', label_metadata[sample_idx])
+        plot_spectrogram(data[sample_idx][76:107], 'mfcc-spectrogram', label_metadata[sample_idx])
 
-# compare energy of a silent and a loud recording
-plot_feature(data[26606][9], idx_to_feature[9], label_metadata[26606])
-plot_feature(data[26606][172], idx_to_feature[172], label_metadata[26606])
+        # compare energy of a silent and a loud recording
+        plot_feature(data[26606][9], idx_to_feature[9], label_metadata[26606])
+        plot_feature(data[26606][172], idx_to_feature[172], label_metadata[26606])
+
+"""
+Set up SVM
+"""
+labels = label_metadata['word']
+
+# Create a SVM classifier
+clf = svm.SVC()
+
+# Standardize the data
+scaler = StandardScaler()
+
+# Create a pipeline that standardizes, then runs the classifier
+pipeline = make_pipeline(scaler, clf)
+
+# Reshape the data into a 2D array
+data_2d = data.reshape(data.shape[0], -1)
+
+# Create a KFold object
+kf = KFold(n_splits=n)
+
+# Initialize an empty list to store the scores for each fold
+scores = []
+
+# Loop over each fold
+for train_index, test_index in tqdm(kf.split(data_2d), total=n, desc='Training SVM'):
+    # Split the data into training and testing sets for this fold
+    X_train, X_test = data_2d[train_index], data_2d[test_index]
+    y_train, y_test = labels[train_index], labels[test_index]
+
+    # Fit the pipeline to the training data
+    pipeline.fit(X_train, y_train)
+
+    # Score the model on the test data and append the score to the scores list
+    scores.append(pipeline.score(X_test, y_test))
+
+# Convert the scores list to a numpy array
+scores = np.array(scores)
+
+print(f"Cross-validation scores: {scores}")
+print(f"Average cross-validation score: {scores.mean()}")
