@@ -2,10 +2,10 @@ import numpy as np
 import random
 from matplotlib import pyplot as plt
 import pandas as pd
-from sklearn import svm
-from sklearn.model_selection import KFold
+from sklearn.metrics import accuracy_score
 from sklearn.pipeline import make_pipeline
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, LabelEncoder, MinMaxScaler
+from sklearn.svm import SVC
 from tqdm import tqdm
 
 # TODO set to True to show graphs
@@ -74,21 +74,22 @@ def get_data_for_speakers(speaker_ids):
 
 
 # Second version of get_data_for_speakers, should be more efficient
-def get_data_for_speakers(speaker_ids):
+def get_data_for_speakers(speaker_ids, label_metadata, data):
     """
-    Retrieve all recording data for a specified array of speaker IDs.
-
-    :param speaker_ids: Array of speaker IDs.
-    :return: Array of recordings corresponding to the speaker IDs.
+    Retrieve all recording data and labels for specified array of speaker IDs, and flatten the data.
     """
-    try:
-        condition = np.isin(label_metadata['speaker_id'], speaker_ids)
-        recording_ids = label_metadata['id'][condition]
-        return data[recording_ids]
-    except IndexError:
-        print("Error: Speaker ID not found in dataset.")
-        return np.array([])
+    condition = np.isin(label_metadata['speaker_id'], speaker_ids)
+    indices = np.where(condition)[0]
+    # Flatten each sample's feature data within the selected indices
+    selected_data = data[indices]
+    flattened_data = np.array([sample.flatten() for sample in selected_data])
+    return flattened_data, label_metadata['word'][indices]
 
+
+# get map of encoder for labels and their numerical representation as dictionary
+def get_label_map(le: LabelEncoder):
+    label_map = dict(zip(le.classes_, le.transform(le.classes_)))
+    return label_map
 
 
 """
@@ -110,20 +111,28 @@ for fold_idx, fold in enumerate(speaker_splits_ids):
     print("get speaker data for fold {}/{}".format(fold_idx + 1, n))
     recording_folds.append(get_data_for_speakers(fold))
 '''
+# Initialize the LabelEncoder
+le = LabelEncoder()
+
+# Fit the LabelEncoder with the labels from the training data
+le.fit(label_metadata['word'])
+
+# Transform the labels into numerical labels
+label_metadata['word'] = le.transform(label_metadata['word'])
+print(label_metadata['word'])
 
 # Second version of splitting data into n sub-sets
 n = 10
-speaker_ids = np.unique(label_metadata['speaker_id']) 
+speaker_ids = np.unique(label_metadata['speaker_id'])
 np.random.shuffle(speaker_ids)
 speaker_splits_ids = np.array_split(speaker_ids, n)
 
 recording_folds = []
 for fold_idx, fold in enumerate(speaker_splits_ids):
-    print(f"Retrieving speaker data for fold {fold_idx + 1}/{n}")
-    fold_data = get_data_for_speakers(fold)
-    recording_folds.append(fold_data)
-    print(f"Retrieved {len(fold_data)} samples.")
-
+    print(f"Retrieving data for fold {fold_idx + 1}/{n}")
+    fold_data, fold_labels = get_data_for_speakers(fold, label_metadata, data)
+    recording_folds.append((fold_data, fold_labels))
+    print(f"Retrieved {len(fold_data)} samples with labels.")
 
 # plot every feature of a single audio snippet
 # (just for showcasing purposes, so you can get an idea what the data looks like)
@@ -144,40 +153,88 @@ for feat_idx, feat in enumerate(data[sample_idx]):
 """
 Set up SVM
 """
-labels = label_metadata['word']
 
-# Create a SVM classifier
-clf = svm.SVC()
 
-# Standardize the data
-scaler = StandardScaler()
+# Call this function before appending the labels to the data
+def normalize_feature(data, feature_index):
+    """
+    Normalize a feature of the data to a value between 0 and 1 using the scikit Standard Scaler.
+    """
+    # Extract the feature values from the data
+    feature_values = np.array([sample[feature_index] for sample in data])
+    # flatten to 1d array
+    feature_values = feature_values.flatten().reshape(-1, 1)
+    # Create a StandardScaler object
+    scaler = MinMaxScaler()
+    # Fit the scaler to the feature values
+    scaler.fit(feature_values)
+    # Transform the feature values using the scaler
+    normalized_feature = scaler.transform(feature_values)
+    # transform again to 2d array, take the number of samples per array
+    normalized_feature = normalized_feature.reshape(-1, len(data))
+    return normalized_feature
 
-# Create a pipeline that standardizes, then runs the classifier
-pipeline = make_pipeline(scaler, clf)
 
-# Reshape the data into a 2D array
-data_2d = data.reshape(data.shape[0], -1)
+def normalize_data(data):
+    """
+    Normalize all features of the data to a value between 0 and 1 using the scikit Standard Scaler.
+    """
+    normalized_data = []
+    for i in range(len(data[0])):
+        normalized_data.append(normalize_feature(data, i))
 
-# Create a KFold object
-kf = KFold(n_splits=n)
+    # flatten to 2d array
+    #normalized_data = np.array(normalized_data).reshape(-1, 44 * 175)
+    return np.array(normalized_data)
 
-# Initialize an empty list to store the scores for each fold
-scores = []
 
-# Loop over each fold
-for train_index, test_index in tqdm(kf.split(data_2d), total=n, desc='Training SVM'):
-    # Split the data into training and testing sets for this fold
-    X_train, X_test = data_2d[train_index], data_2d[test_index]
-    y_train, y_test = labels[train_index], labels[test_index]
+# Append the labels to the data, assume that the labels are in the same order as the data
+def append_labels(data, labels):
+    """
+    Append the labels to the data using NumPy's column_stack function.
+    """
+    # Flatten the data to 2D if it's not already
+    if data.ndim > 2:
+        data = data.reshape(data.shape[0], -1)
+    # Convert labels to a 2D array with shape (n, 1)
+    labels_2d = labels.reshape(-1, 1)
+    # Check if the number of rows in data and labels_2d match
+    if data.shape[0] != labels_2d.shape[0]:
+        raise ValueError(f"Number of rows in data ({data.shape[0]}) and labels ({labels_2d.shape[0]}) do not match.")
+    # Use np.column_stack to append labels to the data
+    appended_data = np.column_stack((data, labels_2d))
+    return appended_data
 
-    # Fit the pipeline to the training data
-    pipeline.fit(X_train, y_train)
+#normalized_data = normalize_data(data)
+#print(normalized_data.shape)
 
-    # Score the model on the test data and append the score to the scores list
-    scores.append(pipeline.score(X_test, y_test))
+# Set up the SVM classifier with the normalized data
+clf = make_pipeline(StandardScaler(), SVC())
 
-# Convert the scores list to a numpy array
-scores = np.array(scores)
+# Initialize the accuracy list
+accuracies = []
 
-print(f"Cross-validation scores: {scores}")
-print(f"Average cross-validation score: {scores.mean()}")
+# Iterate over the recording folds
+for fold_idx, (fold_data, fold_labels) in enumerate(recording_folds):
+    print(f"Training SVM for fold {fold_idx + 1}/{n}")
+    # Normalize the data
+    normalized_fold_data = normalize_data(fold_data)
+    # Append the labels to the data
+    appended_fold_data = append_labels(normalized_fold_data, fold_labels)
+    # Shuffle the data
+    np.random.shuffle(appended_fold_data)
+    # Split the data into features and labels
+    X = appended_fold_data[:, :-1]
+    y = appended_fold_data[:, -1]
+    # Fit the SVM classifier
+    clf.fit(X, y)
+    # Predict the labels
+    y_pred = clf.predict(X)
+    # Calculate the accuracy
+    accuracy = accuracy_score(y, y_pred)
+    accuracies.append(accuracy)
+    print(f"Accuracy for fold {fold_idx + 1}/{n}: {accuracy}")
+
+# Calculate the mean accuracy
+mean_accuracy = np.mean(accuracies)
+print(f"Mean accuracy: {mean_accuracy}")
