@@ -82,8 +82,7 @@ def get_data_for_speakers(speaker_ids, label_metadata, data):
     indices = np.where(condition)[0]
     # Flatten each sample's feature data within the selected indices
     selected_data = data[indices]
-    flattened_data = np.array([sample.flatten() for sample in selected_data])
-    return flattened_data, label_metadata['word'][indices]
+    return selected_data, label_metadata['word'][indices]
 
 
 # get map of encoder for labels and their numerical representation as dictionary
@@ -119,7 +118,6 @@ le.fit(label_metadata['word'])
 
 # Transform the labels into numerical labels
 label_metadata['word'] = le.transform(label_metadata['word'])
-print(label_metadata['word'])
 
 # Second version of splitting data into n sub-sets
 n = 10
@@ -158,7 +156,7 @@ Set up SVM
 # Call this function before appending the labels to the data
 def normalize_feature(data, feature_index):
     """
-    Normalize a feature of the data to a value between 0 and 1 using the scikit Standard Scaler.
+    Normalize a feature of the data to a value between 0 and 1 using the scikit MinMax Scaler.
     """
     # Extract the feature values from the data
     feature_values = np.array([sample[feature_index] for sample in data])
@@ -177,15 +175,15 @@ def normalize_feature(data, feature_index):
 
 def normalize_data(data):
     """
-    Normalize all features of the data to a value between 0 and 1 using the scikit Standard Scaler.
+    Normalize all features of the data to a value between 0 and 1 using the scikit MinMax Scaler.
     """
     normalized_data = []
-    for i in range(len(data[0])):
+    for i in range(data.shape[2]):
         normalized_data.append(normalize_feature(data, i))
 
-    # flatten to 2d array
-    #normalized_data = np.array(normalized_data).reshape(-1, 44 * 175)
-    return np.array(normalized_data)
+    # Stack the normalized features along the last axis
+    normalized_data = np.stack(normalized_data, axis=-1)
+    return normalized_data
 
 
 # Append the labels to the data, assume that the labels are in the same order as the data
@@ -205,36 +203,52 @@ def append_labels(data, labels):
     appended_data = np.column_stack((data, labels_2d))
     return appended_data
 
-#normalized_data = normalize_data(data)
-#print(normalized_data.shape)
+print("data shape: ",data.shape)
+normalized_data = normalize_data(data)
+print("data normalized: ",normalized_data.shape)
+appended_data = append_labels(normalized_data, label_metadata['word'])
+print("label appended: ",appended_data.shape)
 
-# Set up the SVM classifier with the normalized data
-clf = make_pipeline(StandardScaler(), SVC())
 
-# Initialize the accuracy list
+"""
+# Initialize SVM
+svm = SVC(kernel='linear')
+
 accuracies = []
 
-# Iterate over the recording folds
-for fold_idx, (fold_data, fold_labels) in enumerate(recording_folds):
-    print(f"Training SVM for fold {fold_idx + 1}/{n}")
-    # Normalize the data
-    normalized_fold_data = normalize_data(fold_data)
-    # Append the labels to the data
-    appended_fold_data = append_labels(normalized_fold_data, fold_labels)
-    # Shuffle the data
-    np.random.shuffle(appended_fold_data)
-    # Split the data into features and labels
-    X = appended_fold_data[:, :-1]
-    y = appended_fold_data[:, -1]
-    # Fit the SVM classifier
-    clf.fit(X, y)
-    # Predict the labels
-    y_pred = clf.predict(X)
-    # Calculate the accuracy
-    accuracy = accuracy_score(y, y_pred)
-    accuracies.append(accuracy)
-    print(f"Accuracy for fold {fold_idx + 1}/{n}: {accuracy}")
+# Iterate over the folds with a progress bar
+for i in tqdm(range(n), desc="Training SVM"):
+    # Use the i-th fold as the test set
+    test_data, test_labels = recording_folds[i]
 
-# Calculate the mean accuracy
-mean_accuracy = np.mean(accuracies)
-print(f"Mean accuracy: {mean_accuracy}")
+    # Use the remaining folds as the training set
+    train_data = np.concatenate([recording_folds[j][0] for j in range(n) if j != i])
+    train_labels = np.concatenate([recording_folds[j][1] for j in range(n) if j != i])
+
+    # Normalize data and append labels
+    normalized_train_data = normalize_data(train_data)
+    normalized_test_data = normalize_data(test_data)
+    appended_train_data = append_labels(normalized_train_data, train_labels)
+    appended_test_data = append_labels(normalized_test_data, test_labels)
+
+    # Split data into features and labels
+    features_train = appended_train_data[:, :-1]
+    labels_train = appended_train_data[:, -1]
+
+    features_test = appended_test_data[:, :-1]
+    labels_test = appended_test_data[:, -1]
+
+    # Train SVM
+    svm.fit(features_train, labels_train)
+
+    # Make predictions on the test set
+    predictions = svm.predict(features_test)
+
+    # Calculate and store the accuracy of the model
+    accuracy = accuracy_score(labels_test, predictions)
+    accuracies.append(accuracy)
+
+# Print the average accuracy of the model
+print("Average Accuracy:", np.mean(accuracies))
+
+"""
