@@ -7,6 +7,9 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler, LabelEncoder, MinMaxScaler
 from sklearn.svm import SVC
 from tqdm import tqdm
+from sklearn.model_selection import KFold
+from sklearn import neighbors
+import sklearn
 
 # TODO set to True to show graphs
 show_sample_graphs = False
@@ -57,20 +60,21 @@ except Exception as e:
     print(f"Failed to load data: {e}")
     raise
 
-'''
-def get_data_for_speakers(speaker_ids):
-    """
-    get all recording data by speaker id
+# plot every feature of a single audio snippet
+# (just for showcasing purposes, so you can get an idea what the data looks like)
+sample_idx = 0
+for feat_idx, feat in enumerate(data[sample_idx]):
+    if show_sample_graphs:
+        plot_feature(feat, idx_to_feature[feat_idx], label_metadata[sample_idx])
 
-    :param speaker_ids: fold of speakers
-    :return: recordings id
-    """
-    metadata = list(filter(lambda el: np.isin(el[2], speaker_ids), label_metadata))
-    # metadata elements at index 0 = indices of recordings
-    recording_ids = [el[0] for el in metadata]
-    # get recording data by list of indices
-    return data[recording_ids]
-'''
+        # compare energy of a silent and a loud recording
+        plot_feature(data[26606][9], idx_to_feature[9], label_metadata[26606])
+        plot_feature(data[26606][172], idx_to_feature[172], label_metadata[26606])
+
+        # plot mel-spectrogram of first audio snippet
+        # mel-spectrogram data is from idx 12 to 75
+        plot_spectrogram(data[3000][76:107], 'mfcc-spectrogram', label_metadata[3000])
+        plot_spectrogram(data[6000][76:107], 'mfcc-spectrogram', label_metadata[6000])
 
 
 # Second version of get_data_for_speakers, should be more efficient
@@ -82,6 +86,16 @@ def get_data_for_speakers(speaker_ids, label_metadata, data):
     indices = np.where(condition)[0]
     selected_data = data[indices]
     return selected_data, label_metadata['word'][indices]
+
+
+def calc_mean_of_feature(data):
+    """function to get the mean of the time stap for every feature for every sample in order to make our data 2D"""
+    flattened_data = np.mean(data, axis=2)  # mean of the time
+    return flattened_data
+
+
+
+
 
 
 # get map of encoder for labels and their numerical representation as dictionary
@@ -124,29 +138,15 @@ speaker_ids = np.unique(label_metadata['speaker_id'])
 np.random.shuffle(speaker_ids)
 speaker_splits_ids = np.array_split(speaker_ids, n)
 
+data_flat = calc_mean_of_feature(data)
 recording_folds = []
 for fold_idx, fold in enumerate(speaker_splits_ids):
     print(f"Retrieving data for fold {fold_idx + 1}/{n}")
-    fold_data, fold_labels = get_data_for_speakers(fold, label_metadata, data)
+    fold_data, fold_labels = get_data_for_speakers(fold, label_metadata, data_flat)
     recording_folds.append((fold_data, fold_labels))
     print(f"Retrieved {len(fold_data)} samples with labels.")
 
-# plot every feature of a single audio snippet
-# (just for showcasing purposes, so you can get an idea what the data looks like)
-sample_idx = 0
-for feat_idx, feat in enumerate(data[sample_idx]):
-    if show_sample_graphs:
-        plot_feature(feat, idx_to_feature[feat_idx], label_metadata[sample_idx])
-
-        # plot mel-spectrogram of first audio snippet
-        # mel-spectrogram data is from idx 12 to 75
-        plot_spectrogram(data[sample_idx][12:75], 'mel-spectrogram', label_metadata[sample_idx])
-        plot_spectrogram(data[sample_idx][76:107], 'mfcc-spectrogram', label_metadata[sample_idx])
-
-        # compare energy of a silent and a loud recording
-        plot_feature(data[26606][9], idx_to_feature[9], label_metadata[26606])
-        plot_feature(data[26606][172], idx_to_feature[172], label_metadata[26606])
-
+None
 """
 Set up SVM
 """
@@ -202,12 +202,12 @@ def append_labels(data, labels):
     appended_data = np.column_stack((data, labels_2d))
     return appended_data
 
-print("data shape: ",data.shape)
-normalized_data = normalize_data(data)
-print("data normalized: ",normalized_data.shape)
-appended_data = append_labels(normalized_data, label_metadata['word'])
-print("label appended: ",appended_data.shape)
 
+print("data shape: ", data.shape)
+normalized_data = normalize_data(data)
+print("data normalized: ", normalized_data.shape)
+appended_data = append_labels(normalized_data, label_metadata['word'])
+print("label appended: ", appended_data.shape)
 
 """
 # Initialize SVM
@@ -251,3 +251,78 @@ for i in tqdm(range(n), desc="Training SVM"):
 print("Average Accuracy:", np.mean(accuracies))
 
 """
+
+"""
+Set up kNN
+"""
+None
+
+
+def train_kNN(X_train, train_label, k_train):
+    """
+    Function that fits a kNN to given data
+    @param X_train, np array, training data
+    @param train_label, np array, training labels
+    @param k_train, integer, k for the kNN
+    @output classifier, kNN instance, classifier that was fitted to training data
+    """
+    # your code goes here ↓↓↓
+    classifier = neighbors.KNeighborsClassifier(n_neighbors=k_train)
+    classifier.fit(X_train, train_label)
+
+    return classifier
+
+
+def eval_kNN(classifier, X_eval):
+    """
+    Function that returns predictions for some input data
+    @param classifier, kNN instance, trained kNN classifier
+    @param X_eval, np array, data that you want to predict the labels for
+    @output predicitons, np array, predicted labels
+    """
+    # your code goes here ↓↓↓
+    predictions = classifier.predict(X_eval)
+
+    return predictions
+
+
+def mean_zero_one_loss(true_label, pred_label):
+    """
+    Function that calculates the mean zero-one loss for given true and predicted la
+    @param true_label, np array, true labels
+    @param pred_label, np array, predicted labels
+    @output loss, float, mean zero-one loss
+    """
+    # your code goes here ↓↓↓
+    loss = sklearn.metrics.zero_one_loss(true_label, pred_label)
+    return loss
+
+
+def run_kNN(X, labels, nf, k):
+    """
+    Function that combines all functions using CV
+    @param X, np array, training data
+    @param labels, np array, training labels
+    @param nf, integer, number of folds for CV
+    @param k, integer, k for kNN
+    @output mean_error, float, mean error over all folds
+    """
+    # your code goes here ↓↓↓
+    error = 0
+    # split lists into nf distinct sets
+    sub_sets_X = np.array_split(X, nf)
+    sub_sets_y = np.array_split(labels, nf)
+    for i in range(nf):
+        # use set at index i as evaluation set
+        classifier = train_kNN(
+            np.concatenate(sub_sets_X[:i] + sub_sets_X[i + 1:]),  # leave out test sub
+            np.concatenate(sub_sets_y[:i] + sub_sets_y[i + 1:]),
+            k)
+        predictions = eval_kNN(classifier, sub_sets_X[i])
+        error += mean_zero_one_loss(sub_sets_y[i], predictions)
+    return error / nf
+
+
+error_holder = []
+for k in range(1, m + 1, 2):  # range with 179 included and step of 2
+    error_holder.append(run_kNN(X, y, nf, k))
