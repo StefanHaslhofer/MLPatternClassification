@@ -213,34 +213,42 @@ print("data normalized: ", normalized_data.shape)
 appended_data = append_labels(normalized_data, label_metadata['word'])
 print("label appended: ",appended_data.shape)
 
+
+"""
 # Initialize the SVM model
 svm = SVC(kernel='linear')
 
 # List to store the accuracy for each fold
 accuracies = []
 
-# Iterate over the 10 folds
-for i in range(n):
-    # Use the i-th fold as the test set
-    test_data, test_labels = recording_folds[i]
+# Create a progress bar
+with tqdm(total=n, desc="Training Progress", bar_format="{l_bar}{bar} [ time left: {remaining} ]") as pbar:
+    # Iterate over the 10 folds
+    for i in range(n):
+        # Use the i-th fold as the test set
+        test_data, test_labels = recording_folds[i]
 
-    # Use the remaining folds as the training set
-    train_data = np.concatenate([recording_folds[j][0] for j in range(n) if j != i])
-    train_labels = np.concatenate([recording_folds[j][1] for j in range(n) if j != i])
+        # Use the remaining folds as the training set
+        train_data = np.concatenate([recording_folds[j][0] for j in range(n) if j != i])
+        train_labels = np.concatenate([recording_folds[j][1] for j in range(n) if j != i])
 
-    # Normalize the training and test data
-    normalized_train_data = normalize_data(train_data)
-    normalized_test_data = normalize_data(test_data)
+        # Normalize the training and test data
+        normalized_train_data = normalize_data(train_data)
+        normalized_test_data = normalize_data(test_data)
 
-    # Train the SVM model with the training data
-    svm.fit(normalized_train_data, train_labels)
+        # Train the SVM model with the training data
+        svm.fit(normalized_train_data, train_labels)
 
-    # Make predictions on the test data
-    predictions = svm.predict(normalized_test_data)
+        # Make predictions on the test data
+        predictions = svm.predict(normalized_test_data)
 
-    # Calculate the accuracy of the model
-    accuracy = accuracy_score(test_labels, predictions)
-    accuracies.append(accuracy)
+        # Calculate the accuracy of the model
+        accuracy = accuracy_score(test_labels, predictions)
+        accuracies.append(accuracy)
+
+        # Update the progress bar
+        pbar.update(1)
 
 # Print the average accuracy of the model
 print("Average Accuracy:", np.mean(accuracies))
+"""
