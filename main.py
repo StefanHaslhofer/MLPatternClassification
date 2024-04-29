@@ -80,7 +80,6 @@ def get_data_for_speakers(speaker_ids, label_metadata, data):
     """
     condition = np.isin(label_metadata['speaker_id'], speaker_ids)
     indices = np.where(condition)[0]
-    # Flatten each sample's feature data within the selected indices
     selected_data = data[indices]
     return selected_data, label_metadata['word'][indices]
 
@@ -89,7 +88,6 @@ def get_data_for_speakers(speaker_ids, label_metadata, data):
 def get_label_map(le: LabelEncoder):
     label_map = dict(zip(le.classes_, le.transform(le.classes_)))
     return label_map
-
 
 
 """
