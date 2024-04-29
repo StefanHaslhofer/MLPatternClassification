@@ -88,20 +88,20 @@ def get_data_for_speakers(speaker_ids, label_metadata, data):
     return selected_data, label_metadata['word'][indices]
 
 
-def calc_mean_of_feature(data):
-    """function to get the mean of the time stap for every feature for every sample in order to make our data 2D"""
-    flattened_data = np.mean(data, axis=2)  # mean of the time
-    return flattened_data
-
-
-
-
-
-
 # get map of encoder for labels and their numerical representation as dictionary
 def get_label_map(le: LabelEncoder):
     label_map = dict(zip(le.classes_, le.transform(le.classes_)))
     return label_map
+
+
+def flatten_data_by_mean(data):
+    """
+    Flatten 3D data to 2D by calculating the mean for each feature and frame.
+
+    :param data: 3D array of shape (n_recordings, n_features, n_frames)
+    :return: 2D array of shape (n_recordings, n_features)
+    """
+    return np.mean(data, axis=2)
 
 
 """
@@ -138,7 +138,6 @@ speaker_ids = np.unique(label_metadata['speaker_id'])
 np.random.shuffle(speaker_ids)
 speaker_splits_ids = np.array_split(speaker_ids, n)
 
-data_flat = calc_mean_of_feature(data)
 recording_folds = []
 for fold_idx, fold in enumerate(speaker_splits_ids):
     print(f"Retrieving data for fold {fold_idx + 1}/{n}")
@@ -152,23 +151,18 @@ Set up SVM
 """
 
 
-# Call this function before appending the labels to the data
 def normalize_feature(data, feature_index):
     """
     Normalize a feature of the data to a value between 0 and 1 using the scikit MinMax Scaler.
     """
     # Extract the feature values from the data
-    feature_values = np.array([sample[feature_index] for sample in data])
-    # flatten to 1d array
-    feature_values = feature_values.flatten().reshape(-1, 1)
-    # Create a StandardScaler object
+    feature_values = data[:, feature_index].reshape(-1, 1)
+    # Create a MinMaxScaler object
     scaler = MinMaxScaler()
     # Fit the scaler to the feature values
     scaler.fit(feature_values)
     # Transform the feature values using the scaler
     normalized_feature = scaler.transform(feature_values)
-    # transform again to 2d array, take the number of samples per array
-    normalized_feature = normalized_feature.reshape(-1, len(data))
     return normalized_feature
 
 
@@ -177,11 +171,11 @@ def normalize_data(data):
     Normalize all features of the data to a value between 0 and 1 using the scikit MinMax Scaler.
     """
     normalized_data = []
-    for i in range(data.shape[2]):
+    for i in range(data.shape[1]):
         normalized_data.append(normalize_feature(data, i))
 
     # Stack the normalized features along the last axis
-    normalized_data = np.stack(normalized_data, axis=-1)
+    normalized_data = np.column_stack(normalized_data)
     return normalized_data
 
 
@@ -190,9 +184,6 @@ def append_labels(data, labels):
     """
     Append the labels to the data using NumPy's column_stack function.
     """
-    # Flatten the data to 2D if it's not already
-    if data.ndim > 2:
-        data = data.reshape(data.shape[0], -1)
     # Convert labels to a 2D array with shape (n, 1)
     labels_2d = labels.reshape(-1, 1)
     # Check if the number of rows in data and labels_2d match
@@ -203,53 +194,51 @@ def append_labels(data, labels):
     return appended_data
 
 
-print("data shape: ", data.shape)
-normalized_data = normalize_data(data)
+print("orginal data shape: ", data.shape)
+flattened_data = flatten_data_by_mean(data)
+print("flattened data shape: ", flattened_data.shape)
+normalized_data = normalize_data(flattened_data)
 print("data normalized: ", normalized_data.shape)
 appended_data = append_labels(normalized_data, label_metadata['word'])
 print("label appended: ", appended_data.shape)
 
 """
-# Initialize SVM
+# Initialize the SVM model
 svm = SVC(kernel='linear')
 
+# List to store the accuracy for each fold
 accuracies = []
 
-# Iterate over the folds with a progress bar
-for i in tqdm(range(n), desc="Training SVM"):
-    # Use the i-th fold as the test set
-    test_data, test_labels = recording_folds[i]
+# Create a progress bar
+with tqdm(total=n, desc="Training Progress", bar_format="{l_bar}{bar} [ time left: {remaining} ]") as pbar:
+    # Iterate over the 10 folds
+    for i in range(n):
+        # Use the i-th fold as the test set
+        test_data, test_labels = recording_folds[i]
 
-    # Use the remaining folds as the training set
-    train_data = np.concatenate([recording_folds[j][0] for j in range(n) if j != i])
-    train_labels = np.concatenate([recording_folds[j][1] for j in range(n) if j != i])
+        # Use the remaining folds as the training set
+        train_data = np.concatenate([recording_folds[j][0] for j in range(n) if j != i])
+        train_labels = np.concatenate([recording_folds[j][1] for j in range(n) if j != i])
 
-    # Normalize data and append labels
-    normalized_train_data = normalize_data(train_data)
-    normalized_test_data = normalize_data(test_data)
-    appended_train_data = append_labels(normalized_train_data, train_labels)
-    appended_test_data = append_labels(normalized_test_data, test_labels)
+        # Normalize the training and test data
+        normalized_train_data = normalize_data(train_data)
+        normalized_test_data = normalize_data(test_data)
 
-    # Split data into features and labels
-    features_train = appended_train_data[:, :-1]
-    labels_train = appended_train_data[:, -1]
+        # Train the SVM model with the training data
+        svm.fit(normalized_train_data, train_labels)
 
-    features_test = appended_test_data[:, :-1]
-    labels_test = appended_test_data[:, -1]
+        # Make predictions on the test data
+        predictions = svm.predict(normalized_test_data)
 
-    # Train SVM
-    svm.fit(features_train, labels_train)
+        # Calculate the accuracy of the model
+        accuracy = accuracy_score(test_labels, predictions)
+        accuracies.append(accuracy)
 
-    # Make predictions on the test set
-    predictions = svm.predict(features_test)
-
-    # Calculate and store the accuracy of the model
-    accuracy = accuracy_score(labels_test, predictions)
-    accuracies.append(accuracy)
+        # Update the progress bar
+        pbar.update(1)
 
 # Print the average accuracy of the model
 print("Average Accuracy:", np.mean(accuracies))
-
 """
 
 """
