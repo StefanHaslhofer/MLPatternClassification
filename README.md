@@ -13,3 +13,6 @@
     ```
     pip install -r requirements.txt
     ```
+# 1) Get the training data
+
+#2)
