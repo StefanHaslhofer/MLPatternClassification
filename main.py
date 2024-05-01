@@ -104,6 +104,34 @@ def flatten_data_by_mean(data):
     return np.mean(data, axis=2)
 
 
+def normalize_feature(data, feature_index):
+    """
+    Normalize a feature of the data to a value between 0 and 1 using the scikit MinMax Scaler.
+    """
+    # Extract the feature values from the data
+    feature_values = data[:, feature_index].reshape(-1, 1)
+    # Create a MinMaxScaler object
+    scaler = MinMaxScaler()
+    # Fit the scaler to the feature values
+    scaler.fit(feature_values)
+    # Transform the feature values using the scaler
+    normalized_feature = scaler.transform(feature_values)
+    return normalized_feature
+
+
+def normalize_data(data):
+    """
+    Normalize all features of the data to a value between 0 and 1 using the scikit MinMax Scaler.
+    """
+    norm_data = []
+    for i in range(data.shape[1]):
+        norm_data.append(normalize_feature(data, i))
+
+    # Stack the normalized features along the last axis
+    norm_data = np.column_stack(norm_data)
+    return norm_data
+
+
 """
 TASK 3: Classification
 """
@@ -138,10 +166,16 @@ speaker_ids = np.unique(label_metadata['speaker_id'])
 np.random.shuffle(speaker_ids)
 speaker_splits_ids = np.array_split(speaker_ids, n)
 
+print("orginal data shape: ", data.shape)
+flattened_data = flatten_data_by_mean(data)
+print("flattened data shape: ", flattened_data.shape)
+normalized_data = normalize_data(flattened_data)
+print("data normalized: ", normalized_data.shape)
+
 recording_folds = []
 for fold_idx, fold in enumerate(speaker_splits_ids):
     print(f"Retrieving data for fold {fold_idx + 1}/{n}")
-    fold_data, fold_labels = get_data_for_speakers(fold, label_metadata, data_flat)
+    fold_data, fold_labels = get_data_for_speakers(fold, label_metadata, normalized_data)
     recording_folds.append((fold_data, fold_labels))
     print(f"Retrieved {len(fold_data)} samples with labels.")
 
@@ -149,34 +183,6 @@ None
 """
 Set up SVM
 """
-
-
-def normalize_feature(data, feature_index):
-    """
-    Normalize a feature of the data to a value between 0 and 1 using the scikit MinMax Scaler.
-    """
-    # Extract the feature values from the data
-    feature_values = data[:, feature_index].reshape(-1, 1)
-    # Create a MinMaxScaler object
-    scaler = MinMaxScaler()
-    # Fit the scaler to the feature values
-    scaler.fit(feature_values)
-    # Transform the feature values using the scaler
-    normalized_feature = scaler.transform(feature_values)
-    return normalized_feature
-
-
-def normalize_data(data):
-    """
-    Normalize all features of the data to a value between 0 and 1 using the scikit MinMax Scaler.
-    """
-    normalized_data = []
-    for i in range(data.shape[1]):
-        normalized_data.append(normalize_feature(data, i))
-
-    # Stack the normalized features along the last axis
-    normalized_data = np.column_stack(normalized_data)
-    return normalized_data
 
 
 # Append the labels to the data, assume that the labels are in the same order as the data
@@ -193,14 +199,9 @@ def append_labels(data, labels):
     appended_data = np.column_stack((data, labels_2d))
     return appended_data
 
-
-print("orginal data shape: ", data.shape)
-flattened_data = flatten_data_by_mean(data)
-print("flattened data shape: ", flattened_data.shape)
-normalized_data = normalize_data(flattened_data)
-print("data normalized: ", normalized_data.shape)
-appended_data = append_labels(normalized_data, label_metadata['word'])
-print("label appended: ", appended_data.shape)
+# TODO do we need this? labels are already appended
+# appended_data = append_labels(normalized_data, label_metadata['word'])
+# print("label appended: ", appended_data.shape)
 
 """
 # Initialize the SVM model
