@@ -51,6 +51,16 @@ def plot_features(std, speaker_id):
     plt.show()
 
 
+def scatter_features(d, labels):
+    # your code goes here ↓↓↓
+    plt.scatter(d[:20, 9], d[:20, 11], c=labels[:20].astype(int))
+    plt.xlabel("x1")
+    plt.ylabel("x2")
+    plt.colorbar()
+    plt.show()
+    None
+
+
 # load from data files provided on moodle
 try:
     label_metadata = np.genfromtxt('metadata/development.csv', dtype=None, delimiter=',', names=True, encoding='utf-8')
@@ -172,7 +182,7 @@ print("flattened data shape: ", flattened_data.shape)
 normalized_data = normalize_data(flattened_data)
 print("data normalized: ", normalized_data.shape)
 # remove unnecessary features
-# filtered_data = normalized_data
+# normalized_data = normalized_data[:, :12]
 
 recording_folds = []
 for fold_idx, fold in enumerate(speaker_splits_ids):
@@ -300,6 +310,7 @@ def run_kNN(d, nf, k):
     X_train = [e.get('data') for e in d]
     label_train = [e.get('labels') for e in d]
     for i in range(nf):
+        scatter_features(X_train[i], label_train[i])
         # use set at index i as evaluation set
         classifier = train_kNN(
             np.concatenate(X_train[:i] + X_train[i + 1:]),  # leave out test sub
