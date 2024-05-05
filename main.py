@@ -171,15 +171,16 @@ flattened_data = flatten_data_by_mean(data)
 print("flattened data shape: ", flattened_data.shape)
 normalized_data = normalize_data(flattened_data)
 print("data normalized: ", normalized_data.shape)
+# remove unnecessary features
+# filtered_data = normalized_data
 
 recording_folds = []
 for fold_idx, fold in enumerate(speaker_splits_ids):
     print(f"Retrieving data for fold {fold_idx + 1}/{n}")
     fold_data, fold_labels = get_data_for_speakers(fold, label_metadata, normalized_data)
-    recording_folds.append((fold_data, fold_labels))
+    recording_folds.append({'data': fold_data, 'labels': fold_labels})
     print(f"Retrieved {len(fold_data)} samples with labels.")
 
-None
 """
 Set up SVM
 """
@@ -198,6 +199,7 @@ def append_labels(data, labels):
     # Use np.column_stack to append labels to the data
     appended_data = np.column_stack((data, labels_2d))
     return appended_data
+
 
 # TODO do we need this? labels are already appended
 # appended_data = append_labels(normalized_data, label_metadata['word'])
@@ -245,7 +247,6 @@ print("Average Accuracy:", np.mean(accuracies))
 """
 Set up kNN
 """
-None
 
 
 def train_kNN(X_train, train_label, k_train):
@@ -256,7 +257,6 @@ def train_kNN(X_train, train_label, k_train):
     @param k_train, integer, k for the kNN
     @output classifier, kNN instance, classifier that was fitted to training data
     """
-    # your code goes here ↓↓↓
     classifier = neighbors.KNeighborsClassifier(n_neighbors=k_train)
     classifier.fit(X_train, train_label)
 
@@ -270,7 +270,6 @@ def eval_kNN(classifier, X_eval):
     @param X_eval, np array, data that you want to predict the labels for
     @output predicitons, np array, predicted labels
     """
-    # your code goes here ↓↓↓
     predictions = classifier.predict(X_eval)
 
     return predictions
@@ -283,36 +282,38 @@ def mean_zero_one_loss(true_label, pred_label):
     @param pred_label, np array, predicted labels
     @output loss, float, mean zero-one loss
     """
-    # your code goes here ↓↓↓
     loss = sklearn.metrics.zero_one_loss(true_label, pred_label)
     return loss
 
 
-def run_kNN(X, labels, nf, k):
+def run_kNN(d, nf, k):
     """
     Function that combines all functions using CV
-    @param X, np array, training data
-    @param labels, np array, training labels
+    @param d, np array, training data with labels
     @param nf, integer, number of folds for CV
     @param k, integer, k for kNN
     @output mean_error, float, mean error over all folds
     """
-    # your code goes here ↓↓↓
     error = 0
+    print(f"Training kNN (folds={nf}, k={k})...")
     # split lists into nf distinct sets
-    sub_sets_X = np.array_split(X, nf)
-    sub_sets_y = np.array_split(labels, nf)
+    X_train = [e.get('data') for e in d]
+    label_train = [e.get('labels') for e in d]
     for i in range(nf):
         # use set at index i as evaluation set
         classifier = train_kNN(
-            np.concatenate(sub_sets_X[:i] + sub_sets_X[i + 1:]),  # leave out test sub
-            np.concatenate(sub_sets_y[:i] + sub_sets_y[i + 1:]),
+            np.concatenate(X_train[:i] + X_train[i + 1:]),  # leave out test sub
+            np.concatenate(label_train[:i] + label_train[i + 1:]),
             k)
-        predictions = eval_kNN(classifier, sub_sets_X[i])
-        error += mean_zero_one_loss(sub_sets_y[i], predictions)
+        predictions = eval_kNN(classifier, X_train[i])
+        error += mean_zero_one_loss(label_train[i], predictions)
     return error / nf
 
 
+max_k = 179
 error_holder = []
-for k in range(1, m + 1, 2):  # range with 179 included and step of 2
-    error_holder.append(run_kNN(X, y, nf, k))
+for k in range(1, max_k + 1, 2):  # range with 179 included and step of 2
+    error_holder.append(run_kNN(recording_folds, n, k))
+    None
+
+None
