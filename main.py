@@ -107,7 +107,7 @@ def get_label_map(le: LabelEncoder):
 
 def flatten_data_by_mean(data, axis):
     """
-    Flatten 3D data to 2D by calculating the mean along an axis
+    Flatten 3D data to 2D by calculating the mean along axis
 
     :param data: 3D array of shape (n_recordings, n_features, n_frames)
     :return: 2D array of shape (n_recordings, n_frames)
@@ -177,6 +177,7 @@ speaker_ids = np.unique(label_metadata['speaker_id'])
 np.random.shuffle(speaker_ids)
 speaker_splits_ids = np.array_split(speaker_ids, n)
 
+
 def setup_knn(data):
     # only use mfcc (also cut away mfcc bin 0 and upper bins)
     data = data[:, 13:60]
@@ -184,8 +185,9 @@ def setup_knn(data):
     # calculate mean for each frame (along axis 1)
     flattened_data = flatten_data_by_mean(data, 1)
     print("flattened data shape: ", flattened_data.shape)
-    normalized_data = normalize_data(data)
-    print("data normalized: ", normalized_data.shape)
+    # don't normalize spectrograms
+    # normalized_data = normalize_data(data)
+    # print("data normalized: ", normalized_data.shape)
 
     recording_folds = []
     for fold_idx, fold in enumerate(speaker_splits_ids):
@@ -195,6 +197,7 @@ def setup_knn(data):
         print(f"Retrieved {len(fold_data)} samples with labels.")
 
     return recording_folds
+
 
 recording_folds = setup_knn(data)
 
@@ -334,5 +337,3 @@ error_holder = []
 for k in range(1, max_k + 1, 2):  # range with 179 included and step of 2
     error_holder.append(run_kNN(recording_folds, n, k))
     None
-
-None
