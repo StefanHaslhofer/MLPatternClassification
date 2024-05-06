@@ -13,6 +13,7 @@ import sklearn
 
 # TODO set to True to show graphs
 show_sample_graphs = False
+show_scatter_plot = False
 
 
 def plot_feature(feat, feat_name, snip_meta):
@@ -310,7 +311,8 @@ def run_kNN(d, nf, k):
     X_train = [e.get('data') for e in d]
     label_train = [e.get('labels') for e in d]
     for i in range(nf):
-        scatter_features(X_train[i], label_train[i])
+        if show_scatter_plot:
+            scatter_features(X_train[i], label_train[i])
         # use set at index i as evaluation set
         classifier = train_kNN(
             np.concatenate(X_train[:i] + X_train[i + 1:]),  # leave out test sub
