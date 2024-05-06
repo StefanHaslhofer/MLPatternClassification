@@ -105,14 +105,14 @@ def get_label_map(le: LabelEncoder):
     return label_map
 
 
-def flatten_data_by_mean(data):
+def flatten_data_by_mean(data, axis):
     """
-    Flatten 3D data to 2D by calculating the mean for each feature and frame.
+    Flatten 3D data to 2D by calculating the mean along an axis
 
     :param data: 3D array of shape (n_recordings, n_features, n_frames)
-    :return: 2D array of shape (n_recordings, n_features)
+    :return: 2D array of shape (n_recordings, n_frames)
     """
-    return np.mean(data, axis=2)
+    return np.mean(data, axis=axis)
 
 
 def normalize_feature(data, feature_index):
@@ -177,20 +177,26 @@ speaker_ids = np.unique(label_metadata['speaker_id'])
 np.random.shuffle(speaker_ids)
 speaker_splits_ids = np.array_split(speaker_ids, n)
 
-print("orginal data shape: ", data.shape)
-flattened_data = flatten_data_by_mean(data)
-print("flattened data shape: ", flattened_data.shape)
-normalized_data = normalize_data(flattened_data)
-print("data normalized: ", normalized_data.shape)
-# remove unnecessary features
-# normalized_data = normalized_data[:, :12]
+def setup_knn(data):
+    # only use mfcc (also cut away mfcc bin 0 and upper bins)
+    data = data[:, 13:60]
+    print("orginal data shape: ", data.shape)
+    # calculate mean for each frame (along axis 1)
+    flattened_data = flatten_data_by_mean(data, 1)
+    print("flattened data shape: ", flattened_data.shape)
+    normalized_data = normalize_data(data)
+    print("data normalized: ", normalized_data.shape)
 
-recording_folds = []
-for fold_idx, fold in enumerate(speaker_splits_ids):
-    print(f"Retrieving data for fold {fold_idx + 1}/{n}")
-    fold_data, fold_labels = get_data_for_speakers(fold, label_metadata, normalized_data)
-    recording_folds.append({'data': fold_data, 'labels': fold_labels})
-    print(f"Retrieved {len(fold_data)} samples with labels.")
+    recording_folds = []
+    for fold_idx, fold in enumerate(speaker_splits_ids):
+        print(f"Retrieving data for fold {fold_idx + 1}/{n}")
+        fold_data, fold_labels = get_data_for_speakers(fold, label_metadata, flattened_data)
+        recording_folds.append({'data': fold_data, 'labels': fold_labels})
+        print(f"Retrieved {len(fold_data)} samples with labels.")
+
+    return recording_folds
+
+recording_folds = setup_knn(data)
 
 """
 Set up SVM
