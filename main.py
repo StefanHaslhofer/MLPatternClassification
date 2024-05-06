@@ -178,12 +178,24 @@ np.random.shuffle(speaker_ids)
 speaker_splits_ids = np.array_split(speaker_ids, n)
 
 
+def calc_deltas(data):
+    """
+    calculate the change (delta) of the frequency energy over time
+    """
+    deltas = np.diff(data, axis=2)
+    # trailing_zeros = np.zeros(shape=(deltas.shape[0] ,deltas.shape[1], 1))
+    # deltas = np.concatenate((deltas, trailing_zeros), axis=2)
+    # return np.append(data, deltas, axis=1)
+    return deltas
+
+
 def setup_knn(data):
     # only use mfcc (also cut away mfcc bin 0 and upper bins)
-    data = data[:, 13:60]
-    print("orginal data shape: ", data.shape)
+    reduced_feature_data = data[:, 13:60]
+    print("reduced feature data shape: ", reduced_feature_data.shape)
+    #delta_features = append_deltas(reduced_feature_data)
     # calculate mean for each frame (along axis 1)
-    flattened_data = flatten_data_by_mean(data, 1)
+    flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
     print("flattened data shape: ", flattened_data.shape)
     # don't normalize spectrograms
     # normalized_data = normalize_data(data)
