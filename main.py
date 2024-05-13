@@ -368,10 +368,10 @@ RSEED = 10
 
 def setup_random_forest(data):
     # only use mfcc (also cut away mfcc bin 0 and upper bins)
-    reduced_feature_data = data[:, 0:12]
+    reduced_feature_data = data[:, 13:60]
     print("reduced feature data shape: ", reduced_feature_data.shape)
     # calculate mean for each frame (along axis 1)
-    flattened_data = flatten_data_by_mean(reduced_feature_data, 2)
+    flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
     print("flattened data shape: ", flattened_data.shape)
     # normalized_data = normalize_data(data)
     # print("data normalized: ", normalized_data.shape)
