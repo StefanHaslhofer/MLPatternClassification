@@ -8,12 +8,14 @@ from sklearn.preprocessing import StandardScaler, LabelEncoder, MinMaxScaler
 from sklearn.svm import SVC
 from tqdm import tqdm
 from sklearn.model_selection import KFold
+from sklearn.ensemble import RandomForestClassifier
 from sklearn import neighbors
 import sklearn
 
 # TODO set to True to show graphs
 show_sample_graphs = False
 show_scatter_plot = False
+train_knn = False
 
 
 def plot_feature(feat, feat_name, snip_meta):
@@ -97,6 +99,13 @@ def get_data_for_speakers(speaker_ids, label_metadata, data):
     indices = np.where(condition)[0]
     selected_data = data[indices]
     return selected_data, label_metadata['word'][indices]
+
+
+def get_data(label_metadata, data):
+    """
+    retrieve all recording data alongside labels
+    """
+    return data, label_metadata['word']
 
 
 # get map of encoder for labels and their numerical representation as dictionary
@@ -193,7 +202,7 @@ def setup_knn(data):
     # only use mfcc (also cut away mfcc bin 0 and upper bins)
     reduced_feature_data = data[:, 13:60]
     print("reduced feature data shape: ", reduced_feature_data.shape)
-    #delta_features = append_deltas(reduced_feature_data)
+    # delta_features = append_deltas(reduced_feature_data)
     # calculate mean for each frame (along axis 1)
     flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
     print("flattened data shape: ", flattened_data.shape)
@@ -344,8 +353,59 @@ def run_kNN(d, nf, k):
     return error / nf
 
 
-max_k = 179
-error_holder = []
-for k in range(1, max_k + 1, 2):  # range with 179 included and step of 2
-    error_holder.append(run_kNN(recording_folds, n, k))
-    None
+if train_knn:
+    max_k = 179
+    error_holder = []
+    for k in range(1, max_k + 1, 2):  # range with 179 included and step of 2
+        error_holder.append(run_kNN(recording_folds, n, k))
+        None
+
+"""
+Set up random forests
+"""
+RSEED = 10
+
+
+def setup_random_forest(data):
+    # only use mfcc (also cut away mfcc bin 0 and upper bins)
+    reduced_feature_data = data[:, 0:12]
+    print("reduced feature data shape: ", reduced_feature_data.shape)
+    # calculate mean for each frame (along axis 1)
+    flattened_data = flatten_data_by_mean(reduced_feature_data, 2)
+    print("flattened data shape: ", flattened_data.shape)
+    # normalized_data = normalize_data(data)
+    # print("data normalized: ", normalized_data.shape)
+
+    # 80% - 20% | train - test split
+    speaker_train = speaker_ids[:int(speaker_ids.size * 0.8)]
+    speaker_test = speaker_ids[int(speaker_ids.size * 0.8):]
+
+    # get training data
+    x_train, y_train = get_data_for_speakers(speaker_train, label_metadata, flattened_data)
+    # get test data
+    x_test, y_test = get_data_for_speakers(speaker_test, label_metadata, flattened_data)
+    return x_train, y_train, x_test, y_test
+
+
+x_train, y_train, x_test, y_test = setup_random_forest(data)
+
+
+def fit_predict(
+        x_train: np.ndarray,
+        y_train: np.ndarray,
+        x_test: np.ndarray,
+        y_test: np.ndarray,
+        rseed: int
+) -> tuple[RandomForestClassifier, np.ndarray]:
+    print(f"Train random forest classifier with {x_train.shape[0]} samples.")
+    clf = RandomForestClassifier(random_state=rseed)
+    model = clf.fit(x_train, y_train)
+    prediction = model.predict(x_test)
+    print("Finished random forest prediction.")
+    return model, prediction
+
+
+model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED)
+# error_train = mean_zero_one_loss(y_train, predictions)
+error_test = mean_zero_one_loss(y_test, predictions)
+print(f"random forest error: {error_test}")
