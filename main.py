@@ -301,6 +301,7 @@ def train_svm(recording_folds):
     print(f"Mean accuracy across all folds: {mean_accuracy}")
     return mean_accuracy
 
+
 print("SVM Classifier")
 svm_recording_folds = setup_svm(data)
 mean_accuracy = train_svm(svm_recording_folds)
