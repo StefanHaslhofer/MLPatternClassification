@@ -1,3 +1,4 @@
+import joblib
 import numpy as np
 import random
 from matplotlib import pyplot as plt
@@ -6,7 +7,6 @@ from sklearn.metrics import accuracy_score
 from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.preprocessing import StandardScaler, LabelEncoder, MinMaxScaler
 from sklearn.svm import SVC
-from tqdm import tqdm
 from sklearn.model_selection import KFold, RandomizedSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn import neighbors
@@ -16,7 +16,9 @@ import sklearn
 show_sample_graphs = False
 show_scatter_plot = False
 train_knn = False
-
+tain_random_forest = False
+validate_knn = True
+validate_random_forest = False
 
 def plot_feature(feat, feat_name, snip_meta):
     """
@@ -210,7 +212,7 @@ def calc_deltas(data):
     return deltas
 
 
-def setup_knn(data):
+def setup_knn(data, isTraining):
     # only use mfcc (also cut away mfcc bin 0 and upper bins)
     reduced_feature_data = data[:, 13:60]
     print("reduced feature data shape: ", reduced_feature_data.shape)
@@ -222,17 +224,22 @@ def setup_knn(data):
     # normalized_data = normalize_data(data)
     # print("data normalized: ", normalized_data.shape)
 
-    recording_folds = []
-    for fold_idx, fold in enumerate(speaker_splits_ids):
-        print(f"Retrieving data for fold {fold_idx + 1}/{n}")
-        fold_data, fold_labels = get_data_for_speakers(fold, label_metadata, flattened_data)
-        recording_folds.append({'data': fold_data, 'labels': fold_labels})
-        print(f"Retrieved {len(fold_data)} samples with labels.")
+    if isTraining:
+        recording_folds = []
+        for fold_idx, fold in enumerate(speaker_splits_ids):
+            print(f"Retrieving data for fold {fold_idx + 1}/{n}")
+            fold_data, fold_labels = get_data_for_speakers(fold, label_metadata, flattened_data)
+            recording_folds.append({'data': fold_data, 'labels': fold_labels})
+            print(f"Retrieved {len(fold_data)} samples with labels.")
 
-    return recording_folds
+        return recording_folds
+
+    else:
+        return flattened_data
 
 
-recording_folds = setup_knn(data)
+if(train_knn):
+    recording_folds = setup_knn(data, train_knn)
 
 """
 Set up SVM
@@ -263,7 +270,6 @@ def setup_svm(data):
         # print("recording folds: ", recording_folds)
 
     return svm_recording_folds
-
 
 def train_svm(recording_folds):
     """
@@ -301,10 +307,9 @@ def train_svm(recording_folds):
     print(f"Mean accuracy across all folds: {mean_accuracy}")
     return mean_accuracy
 
-
-print("SVM Classifier")
+'''print("SVM Classifier")
 svm_recording_folds = setup_svm(data)
-mean_accuracy = train_svm(svm_recording_folds)
+mean_accuracy = train_svm(svm_recording_folds)'''
 
 
 """
@@ -372,6 +377,11 @@ def run_kNN(d, nf, k):
             k)
         predictions = eval_kNN(classifier, X_train[i])
         error += mean_zero_one_loss(label_train[i], predictions)
+
+        # We found out that the model performs best with k=5, so we will save the model with k=5
+        if(i == 5):
+            joblib.dump(classifier, "knn_model.pkl")
+
     return error / nf
 
 
@@ -388,7 +398,7 @@ Set up random forests
 RSEED = 10
 
 
-def setup_random_forest(data):
+def setup_random_forest(data, isTraining):
     # only use mfcc (also cut away mfcc bin 0 and upper bins)
     reduced_feature_data = data[:, 13:60]
     print("reduced feature data shape: ", reduced_feature_data.shape)
@@ -398,18 +408,22 @@ def setup_random_forest(data):
     # normalized_data = normalize_data(data)
     # print("data normalized: ", normalized_data.shape)
 
-    # 80% - 20% | train - test split
-    speaker_train = speaker_ids[:int(speaker_ids.size * 0.8)]
-    speaker_test = speaker_ids[int(speaker_ids.size * 0.8):]
+    if(isTraining):
+        # 80% - 20% | train - test split
+        speaker_train = speaker_ids[:int(speaker_ids.size * 0.8)]
+        speaker_test = speaker_ids[int(speaker_ids.size * 0.8):]
 
-    # get training data
-    x_train, y_train = get_data_for_speakers(speaker_train, label_metadata, flattened_data)
-    # get test data
-    x_test, y_test = get_data_for_speakers(speaker_test, label_metadata, flattened_data)
-    return x_train, y_train, x_test, y_test
+        # get training data
+        x_train, y_train = get_data_for_speakers(speaker_train, label_metadata, flattened_data)
+        # get test data
+        x_test, y_test = get_data_for_speakers(speaker_test, label_metadata, flattened_data)
+        return x_train, y_train, x_test, y_test
 
+    else:
+        return flattened_data
 
-x_train, y_train, x_test, y_test = setup_random_forest(data)
+if(tain_random_forest):
+    x_train, y_train, x_test, y_test = setup_random_forest(data, tain_random_forest)
 
 
 def fit_predict(
@@ -427,7 +441,56 @@ def fit_predict(
     return model, prediction
 
 
-model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED)
-# error_train = mean_zero_one_loss(y_train, predictions)
-error_test = mean_zero_one_loss(y_test, predictions)
-print(f"random forest error: {error_test}")
+if(tain_random_forest):
+    model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED)
+    # error_train = mean_zero_one_loss(y_train, predictions)
+    error_test = mean_zero_one_loss(y_test, predictions)
+    print(f"random forest error: {error_test}")
+
+    # save model
+    joblib.dump(model, "random_forest_model.pkl")
+
+
+# validate the models with new data in the validation folder, which contains 5 separate .npy files
+# load from data files provided on moodle
+try:
+    filename = '3_Verena_Staubsauger_an_Alarm_an.npy' # change filename to test different files
+    data_val = np.load(f'validation_data/{filename}')
+    plot_spectrogram(data_val[0][13:75], 'mfcc-spectrogram', ['x','y','z','Verena_Staubsauger_an_Alarm_an'])
+except Exception as e:
+    print(f"Failed to load data: {e}")
+    raise
+
+print("Loaded validation data, with shape: ", data_val.shape)
+rfc = joblib.load("random_forest_model.pkl")
+knn = joblib.load("knn_model.pkl")
+
+label_map = get_label_map(le)
+print("Label map: ", label_map)
+# revert key value pairs in label map
+label_map_reverted = {v: k for k, v in label_map.items()}
+print("Label map reverted: ", label_map_reverted)
+
+if validate_random_forest:
+    # setup data for validation for random forest
+    x_val_rfc = setup_random_forest(data_val, False)
+    print("x_val_rfc shape: ", x_val_rfc.shape)
+
+    # run random forest on validation data, but only 44 samples at a time
+    for i in range(0, x_val_rfc.shape[1], 1):
+        predictions_rfc = rfc.predict(x_val_rfc[:, i:i + 44])
+        if predictions_rfc != ['18']:
+            print(f"Predicting for samples {i} to {i + 44}")
+            print("Predictions: ", label_map_reverted[int(predictions_rfc[0])])
+
+if validate_knn:
+    # setup data for validation for kNN
+    x_val_knn = setup_knn(data_val, False)
+    print("x_val_knn shape: ", x_val_knn.shape)
+
+    # run kNN on validation data
+    for i in range(0, x_val_knn.shape[1], 1):
+        predictions_knn = knn.predict(x_val_knn[:, i:i + 44])
+        if predictions_knn != ['18']:
+            print(f"Predicting for samples {i} to {i + 44}")
+            print("Predictions: ", label_map_reverted[int(predictions_knn[0])])
