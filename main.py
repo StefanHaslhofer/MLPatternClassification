@@ -3,11 +3,11 @@ import random
 from matplotlib import pyplot as plt
 import pandas as pd
 from sklearn.metrics import accuracy_score
-from sklearn.pipeline import make_pipeline
+from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.preprocessing import StandardScaler, LabelEncoder, MinMaxScaler
 from sklearn.svm import SVC
 from tqdm import tqdm
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, RandomizedSearchCV
 from sklearn.ensemble import RandomForestClassifier
 from sklearn import neighbors
 import sklearn
@@ -186,6 +186,18 @@ speaker_ids = np.unique(label_metadata['speaker_id'])
 np.random.shuffle(speaker_ids)
 speaker_splits_ids = np.array_split(speaker_ids, n)
 
+def append_labels(data, labels):
+    """
+    Append the labels to the data using NumPy's column_stack function.
+    """
+    # Convert labels to a 2D array with shape (n, 1)
+    labels_2d = labels.reshape(-1, 1)
+    # Check if the number of rows in data and labels_2d match
+    if data.shape[0] != labels_2d.shape[0]:
+        raise ValueError(f"Number of rows in data ({data.shape[0]}) and labels ({labels_2d.shape[0]}) do not match.")
+    # Use np.column_stack to append labels to the data
+    appended_data = np.column_stack((data, labels_2d))
+    return appended_data
 
 def calc_deltas(data):
     """
@@ -227,63 +239,73 @@ Set up SVM
 """
 
 
-# Append the labels to the data, assume that the labels are in the same order as the data
-def append_labels(data, labels):
+def setup_svm(data):
+    # Flatten the data, by taking the mean of each feature, for each audio snippet.
+    # Effectively we will have 1 row with 175 features for each audio snippet
+
+    flatten_data = []
+    for i in range(len(data)):
+        flatten_data.append(np.mean(data[i], axis=1))
+
+    flatten_data = np.array(flatten_data)
+    print(f"Data flattened ${flatten_data.shape}")  # Should be (45k, 175)
+
+    # Now we will normalize the data accross the features, so that the max value is 1 and the min value is 0
+    normalized_data = normalize_data(flatten_data)
+    print("Data normalized")
+
+    svm_recording_folds = []
+    for fold_idx, fold in enumerate(speaker_splits_ids):
+        print(f"Retrieving data for fold {fold_idx + 1}/{n}")
+        fold_data, fold_labels = get_data_for_speakers(fold, label_metadata, normalized_data)
+        svm_recording_folds.append({'data': fold_data, 'labels': fold_labels})
+        print(f"Retrieved {len(fold_data)} samples with labels.")
+        # print("recording folds: ", recording_folds)
+
+    return svm_recording_folds
+
+
+def train_svm(recording_folds):
     """
-    Append the labels to the data using NumPy's column_stack function.
+    Train and evaluate the SVM classifier using k-fold cross-validation.
     """
-    # Convert labels to a 2D array with shape (n, 1)
-    labels_2d = labels.reshape(-1, 1)
-    # Check if the number of rows in data and labels_2d match
-    if data.shape[0] != labels_2d.shape[0]:
-        raise ValueError(f"Number of rows in data ({data.shape[0]}) and labels ({labels_2d.shape[0]}) do not match.")
-    # Use np.column_stack to append labels to the data
-    appended_data = np.column_stack((data, labels_2d))
-    return appended_data
+    param_dist = {
+        'svc__C': [0.1, 1, 10, 100, 1000],
+        'svc__gamma': [1, 0.1, 0.01, 0.001, 0.0001],
+        'svc__kernel': ['rbf', 'linear', 'poly', 'sigmoid']
+    }
 
-
-# TODO do we need this? labels are already appended
-# appended_data = append_labels(normalized_data, label_metadata['word'])
-# print("label appended: ", appended_data.shape)
-
-"""
-# Initialize the SVM model
-svm = SVC(kernel='linear')
-
-# List to store the accuracy for each fold
-accuracies = []
-
-# Create a progress bar
-with tqdm(total=n, desc="Training Progress", bar_format="{l_bar}{bar} [ time left: {remaining} ]") as pbar:
-    # Iterate over the 10 folds
+    accuracies = []
     for i in range(n):
-        # Use the i-th fold as the test set
-        test_data, test_labels = recording_folds[i]
+        print(f"Fold {i + 1}/{n}")
+        test_data = recording_folds[i]['data']
+        test_labels = recording_folds[i]['labels']
+        training_data = np.concatenate([recording_folds[j]['data'] for j in range(n) if j != i])
+        training_labels = np.concatenate([recording_folds[j]['labels'] for j in range(n) if j != i])
 
-        # Use the remaining folds as the training set
-        train_data = np.concatenate([recording_folds[j][0] for j in range(n) if j != i])
-        train_labels = np.concatenate([recording_folds[j][1] for j in range(n) if j != i])
+        model = Pipeline([
+            ('scaler', StandardScaler()),
+            ('svc', SVC())
+        ])
 
-        # Normalize the training and test data
-        normalized_train_data = normalize_data(train_data)
-        normalized_test_data = normalize_data(test_data)
+        random_search = RandomizedSearchCV(model, param_distributions=param_dist, n_iter=50, refit=True, verbose=3)
+        random_search.fit(training_data, training_labels)
 
-        # Train the SVM model with the training data
-        svm.fit(normalized_train_data, train_labels)
-
-        # Make predictions on the test data
-        predictions = svm.predict(normalized_test_data)
-
-        # Calculate the accuracy of the model
-        accuracy = accuracy_score(test_labels, predictions)
+        print(f"Best parameters for fold {i + 1}: {random_search.best_params_}")
+        y_pred = random_search.predict(test_data)
+        accuracy = accuracy_score(test_labels, y_pred)
         accuracies.append(accuracy)
+        print(f"Accuracy for fold {i + 1}: {accuracy}")
 
-        # Update the progress bar
-        pbar.update(1)
+    mean_accuracy = np.mean(accuracies)
+    print(f"Mean accuracy across all folds: {mean_accuracy}")
+    return mean_accuracy
 
-# Print the average accuracy of the model
-print("Average Accuracy:", np.mean(accuracies))
-"""
+
+print("SVM Classifier")
+svm_recording_folds = setup_svm(data)
+mean_accuracy = train_svm(svm_recording_folds)
+
 
 """
 Set up kNN
