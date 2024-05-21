@@ -1,15 +1,16 @@
-
-import main
+import joblib
 import numpy as np
 import random
 from matplotlib import pyplot as plt
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, f1_score
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler, LabelEncoder, MinMaxScaler
 from sklearn.svm import SVC
 from tqdm import tqdm
+
+import helpers
 
 # In this file we will implement a Support Vector Machine (SVM) classifier to classify the speaker of an audio snippet.
 # It is the same data as in main.py and we  will reuse some functions
@@ -31,7 +32,7 @@ flatten_data = np.array(flatten_data)
 print(f"Data flattened ${flatten_data.shape}") #Should be (45k, 175)
 
 # Now we will normalize the data accross the features, so that the max value is 1 and the min value is 0
-normalize_data = main.normalize_data(flatten_data)
+normalize_data = helpers.normalize_data(flatten_data)
 print("Data normalized")
 
 # Append labels to the data
@@ -63,3 +64,10 @@ y_pred = model.predict(X_test)
 accuracy = accuracy_score(y_test, y_pred)
 
 print(f"Accuracy: {accuracy}")
+
+# Calculate the f1 score
+f1 = f1_score(y_test, y_pred, average='macro')
+print(f"F1 Score: {f1}")
+
+# Save the model using joblib
+joblib.dump(model, 'svm_model.joblib')
