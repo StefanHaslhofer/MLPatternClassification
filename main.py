@@ -15,7 +15,7 @@ import sklearn
 # TODO set to True to show graphs
 show_sample_graphs = False
 show_scatter_plot = False
-train_knn = False
+train_knn = True
 tain_random_forest = False
 validate_knn = True
 validate_random_forest = False
@@ -384,13 +384,21 @@ def run_kNN(d, nf, k):
 
     return error / nf
 
+def plot_error_vs_k(error_holder, m):
+    plt.bar(range(1, m+1, 2), error_holder, color='maroon')
+    plt.xlabel("k")
+    plt.ylabel("error (%)")
+    plt.title("Mean error for k-nearest-neighbors")
+    plt.show()
+
 
 if train_knn:
     max_k = 179
     error_holder = []
     for k in range(1, max_k + 1, 2):  # range with 179 included and step of 2
         error_holder.append(run_kNN(recording_folds, n, k))
-        None
+
+    plot_error_vs_k(error_holder, max_k)
 
 """
 Set up random forests
