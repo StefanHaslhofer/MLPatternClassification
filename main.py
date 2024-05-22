@@ -3,11 +3,12 @@ import numpy as np
 import random
 from matplotlib import pyplot as plt
 import pandas as pd
-from sklearn.metrics import accuracy_score
+from sklearn.dummy import DummyClassifier
+from sklearn.metrics import accuracy_score, classification_report
 from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.preprocessing import StandardScaler, LabelEncoder, MinMaxScaler
 from sklearn.svm import SVC
-from sklearn.model_selection import KFold, RandomizedSearchCV
+from sklearn.model_selection import KFold, RandomizedSearchCV, train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn import neighbors
 import sklearn
@@ -15,10 +16,11 @@ import sklearn
 # TODO set to True to show graphs
 show_sample_graphs = False
 show_scatter_plot = False
-train_knn = True
-tain_random_forest = False
+train_knn = False
+train_random_forest = True
 validate_knn = True
-validate_random_forest = False
+validate_random_forest = True
+
 
 def plot_feature(feat, feat_name, snip_meta):
     """
@@ -75,21 +77,16 @@ except Exception as e:
     print(f"Failed to load data: {e}")
     raise
 
-# plot every feature of a single audio snippet
-# (just for showcasing purposes, so you can get an idea what the data looks like)
-sample_idx = 0
-for feat_idx, feat in enumerate(data[sample_idx]):
-    if show_sample_graphs:
-        plot_feature(feat, idx_to_feature[feat_idx], label_metadata[sample_idx])
 
-        # compare energy of a silent and a loud recording
-        plot_feature(data[26606][9], idx_to_feature[9], label_metadata[26606])
-        plot_feature(data[26606][172], idx_to_feature[172], label_metadata[26606])
-
-        # plot mel-spectrogram of first audio snippet
-        # mel-spectrogram data is from idx 12 to 75
-        plot_spectrogram(data[3000][76:107], 'mfcc-spectrogram', label_metadata[3000])
-        plot_spectrogram(data[6000][76:107], 'mfcc-spectrogram', label_metadata[6000])
+def calc_deltas(data, axis=2):
+    """
+    calculate the change (delta) of the frequency energy over time
+    """
+    deltas = np.diff(data, axis=axis)
+    # trailing_zeros = np.zeros(shape=(deltas.shape[0] ,deltas.shape[1], 1))
+    # deltas = np.concatenate((deltas, trailing_zeros), axis=2)
+    # return np.append(data, deltas, axis=1)
+    return deltas
 
 
 # Second version of get_data_for_speakers, should be more efficient
@@ -188,6 +185,7 @@ speaker_ids = np.unique(label_metadata['speaker_id'])
 np.random.shuffle(speaker_ids)
 speaker_splits_ids = np.array_split(speaker_ids, n)
 
+
 def append_labels(data, labels):
     """
     Append the labels to the data using NumPy's column_stack function.
@@ -201,34 +199,27 @@ def append_labels(data, labels):
     appended_data = np.column_stack((data, labels_2d))
     return appended_data
 
-def calc_deltas(data):
-    """
-    calculate the change (delta) of the frequency energy over time
-    """
-    deltas = np.diff(data, axis=2)
-    # trailing_zeros = np.zeros(shape=(deltas.shape[0] ,deltas.shape[1], 1))
-    # deltas = np.concatenate((deltas, trailing_zeros), axis=2)
-    # return np.append(data, deltas, axis=1)
-    return deltas
-
 
 def setup_knn(data, isTraining):
     # only use mfcc (also cut away mfcc bin 0 and upper bins)
-    reduced_feature_data = data[:, 13:60]
+    reduced_feature_data = calc_deltas(data[:, 13:75])
     print("reduced feature data shape: ", reduced_feature_data.shape)
     # delta_features = append_deltas(reduced_feature_data)
     # calculate mean for each frame (along axis 1)
     flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
     print("flattened data shape: ", flattened_data.shape)
     # don't normalize spectrograms
-    # normalized_data = normalize_data(data)
+    normalized_data = normalize_data(flattened_data)
     # print("data normalized: ", normalized_data.shape)
+
+    plot_spectrogram(flattened_data[1700:2700], 'mfcc-spectrogram', label_metadata[6000])
+    plot_spectrogram(normalized_data[10000:12000], 'mfcc-spectrogram', label_metadata[6000])
 
     if isTraining:
         recording_folds = []
         for fold_idx, fold in enumerate(speaker_splits_ids):
             print(f"Retrieving data for fold {fold_idx + 1}/{n}")
-            fold_data, fold_labels = get_data_for_speakers(fold, label_metadata, flattened_data)
+            fold_data, fold_labels = get_data_for_speakers(fold, label_metadata, normalized_data)
             recording_folds.append({'data': fold_data, 'labels': fold_labels})
             print(f"Retrieved {len(fold_data)} samples with labels.")
 
@@ -238,7 +229,7 @@ def setup_knn(data, isTraining):
         return flattened_data
 
 
-if(train_knn):
+if (train_knn):
     recording_folds = setup_knn(data, train_knn)
 
 """
@@ -270,6 +261,7 @@ def setup_svm(data):
         # print("recording folds: ", recording_folds)
 
     return svm_recording_folds
+
 
 def train_svm(recording_folds):
     """
@@ -307,10 +299,10 @@ def train_svm(recording_folds):
     print(f"Mean accuracy across all folds: {mean_accuracy}")
     return mean_accuracy
 
+
 '''print("SVM Classifier")
 svm_recording_folds = setup_svm(data)
 mean_accuracy = train_svm(svm_recording_folds)'''
-
 
 """
 Set up kNN
@@ -379,18 +371,24 @@ def run_kNN(d, nf, k):
         error += mean_zero_one_loss(label_train[i], predictions)
 
         # We found out that the model performs best with k=5, so we will save the model with k=5
-        if(i == 5):
+        if (k == 11):
             joblib.dump(classifier, "knn_model.pkl")
 
     return error / nf
 
+
 def plot_error_vs_k(error_holder, m):
-    plt.bar(range(1, m+1, 2), error_holder, color='maroon')
+    plt.bar(range(1, m + 1, 2), error_holder, color='maroon')
     plt.xlabel("k")
     plt.ylabel("error (%)")
     plt.title("Mean error for k-nearest-neighbors")
     plt.show()
 
+
+if show_sample_graphs:
+    plot_spectrogram(data[6000][13:75], 'mfcc-spectrogram', label_metadata[6000])
+    plot_spectrogram(calc_deltas(data[6000][13:75], 1), 'mfcc-spectrogram', label_metadata[6000])
+    plot_spectrogram(calc_deltas(calc_deltas(data[6000][13:75], 1), 1), 'mfcc-spectrogram', label_metadata[6000])
 
 if train_knn:
     max_k = 179
@@ -400,6 +398,36 @@ if train_knn:
 
     plot_error_vs_k(error_holder, max_k)
 
+
+def dummy_cls(data):
+    reduced_feature_data = data[:, 13:60]
+    print("reduced feature data shape: ", reduced_feature_data.shape)
+    # calculate mean for each frame (along axis 1)
+    flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
+    print("flattened data shape: ", flattened_data.shape)
+    normalized_data = normalize_data(flattened_data)
+
+    X_train, X_test, y_train, y_test = train_test_split(normalized_data, label_metadata['word'], test_size=0.2, random_state=42)
+    # Create a baseline random classifier
+    dummy_clf = DummyClassifier(strategy='stratified', random_state=42)
+    dummy_clf.fit(X_train, y_train)
+
+    # Make predictions on the test data
+    y_pred = dummy_clf.predict(X_test)
+
+    # Calculate accuracy and other metrics
+    error = mean_zero_one_loss(y_test, y_pred)
+    report = classification_report(y_test, y_pred)
+
+    # Print the results
+    print("Baseline Classifier Error:", error)
+    print("Classification Report:")
+    print(report)
+
+    return error
+
+
+dummy_cls(data)
 """
 Set up random forests
 """
@@ -413,25 +441,22 @@ def setup_random_forest(data, isTraining):
     # calculate mean for each frame (along axis 1)
     flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
     print("flattened data shape: ", flattened_data.shape)
-    # normalized_data = normalize_data(data)
+    normalized_data = normalize_data(data)
     # print("data normalized: ", normalized_data.shape)
 
-    if(isTraining):
+    if (isTraining):
         # 80% - 20% | train - test split
         speaker_train = speaker_ids[:int(speaker_ids.size * 0.8)]
         speaker_test = speaker_ids[int(speaker_ids.size * 0.8):]
 
         # get training data
-        x_train, y_train = get_data_for_speakers(speaker_train, label_metadata, flattened_data)
+        x_train, y_train = get_data_for_speakers(speaker_train, label_metadata, normalized_data)
         # get test data
-        x_test, y_test = get_data_for_speakers(speaker_test, label_metadata, flattened_data)
+        x_test, y_test = get_data_for_speakers(speaker_test, label_metadata, normalized_data)
         return x_train, y_train, x_test, y_test
 
     else:
         return flattened_data
-
-if(tain_random_forest):
-    x_train, y_train, x_test, y_test = setup_random_forest(data, tain_random_forest)
 
 
 def fit_predict(
@@ -449,7 +474,8 @@ def fit_predict(
     return model, prediction
 
 
-if(tain_random_forest):
+if (train_random_forest):
+    x_train, y_train, x_test, y_test = setup_random_forest(data, train_random_forest)
     model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED)
     # error_train = mean_zero_one_loss(y_train, predictions)
     error_test = mean_zero_one_loss(y_test, predictions)
@@ -458,13 +484,12 @@ if(tain_random_forest):
     # save model
     joblib.dump(model, "random_forest_model.pkl")
 
-
 # validate the models with new data in the validation folder, which contains 5 separate .npy files
 # load from data files provided on moodle
 try:
-    filename = '3_Verena_Staubsauger_an_Alarm_an.npy' # change filename to test different files
+    filename = '3_Verena_Staubsauger_an_Alarm_an.npy'  # change filename to test different files
     data_val = np.load(f'validation_data/{filename}')
-    plot_spectrogram(data_val[0][13:75], 'mfcc-spectrogram', ['x','y','z','Verena_Staubsauger_an_Alarm_an'])
+    plot_spectrogram(data_val[0][13:75], 'mfcc-spectrogram', ['x', 'y', 'z', 'Verena_Staubsauger_an_Alarm_an'])
 except Exception as e:
     print(f"Failed to load data: {e}")
     raise
