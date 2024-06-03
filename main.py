@@ -467,7 +467,7 @@ def fit_predict(
         rseed: int
 ) -> tuple[RandomForestClassifier, np.ndarray]:
     print(f"Train random forest classifier with {x_train.shape[0]} samples.")
-    clf = RandomForestClassifier(random_state=rseed)
+    clf = RandomForestClassifier(random_state=rseed, de)
     model = clf.fit(x_train, y_train)
     prediction = model.predict(x_test)
     print("Finished random forest prediction.")
