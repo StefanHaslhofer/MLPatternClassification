@@ -7,6 +7,7 @@ from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 
+
 def plot_feature(feat, feat_name, snip_meta):
     """
     plot a single feature of an audio snippet
@@ -51,6 +52,7 @@ def scatter_features(d, labels):
     plt.colorbar()
     plt.show()
     None
+
 
 def calc_deltas(data, axis=2):
     """
@@ -123,3 +125,20 @@ def normalize_data(data):
     # Stack the normalized features along the last axis
     norm_data = np.column_stack(norm_data)
     return norm_data
+
+
+# Initialize the LabelEncoder
+le = LabelEncoder()
+label_metadata = np.genfromtxt('metadata/development.csv', dtype=None, delimiter=',', names=True, encoding='utf-8')
+# Fit the LabelEncoder with the labels from the training data
+le.fit(label_metadata['word'])
+
+# Transform the labels into numerical labels
+label_metadata['word'] = le.transform(label_metadata['word'])
+label_map = get_label_map(le)
+label_map_reverted = {v: k for k, v in label_map.items()}
+print(label_map_reverted)
+
+
+def convert_int_to_label(label_index):
+    return label_map_reverted[label_index]
