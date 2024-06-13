@@ -1,3 +1,4 @@
+import joblib
 import numpy as np
 import random
 from matplotlib import pyplot as plt
@@ -11,6 +12,8 @@ from sklearn.model_selection import KFold
 from sklearn.ensemble import RandomForestClassifier
 from sklearn import neighbors
 import sklearn
+
+import helpers
 
 # TODO set to True to show graphs
 show_sample_graphs = False
@@ -121,7 +124,7 @@ def flatten_data_by_mean(data, axis):
     :param data: 3D array of shape (n_recordings, n_features, n_frames)
     :return: 2D array of shape (n_recordings, n_frames)
     """
-    return np.mean(data, axis=axis)
+    return np.median(data, axis=axis)
 
 
 def normalize_feature(data, feature_index):
@@ -220,7 +223,8 @@ def setup_knn(data):
     return recording_folds
 
 
-recording_folds = setup_knn(data)
+
+#recording_folds = setup_knn(data)
 
 """
 Set up SVM
@@ -368,10 +372,28 @@ RSEED = 10
 
 def setup_random_forest(data):
     # only use mfcc (also cut away mfcc bin 0 and upper bins)
-    reduced_feature_data = data[:, 13:60]
-    print("reduced feature data shape: ", reduced_feature_data.shape)
-    # calculate mean for each frame (along axis 1)
-    flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
+    print("before:", data.shape)
+    #flattened_data = data[:, 13:60]
+    top_n_feature_importance = helpers.get_most_important_features_names(10)
+
+    top_n_feature_importance_indices = [helpers.get_feature_index_from_name(feature) for feature in top_n_feature_importance]
+
+    top_n_feature_importance_values = [data[:, index] for index in top_n_feature_importance_indices]
+    #convert to numpy array
+    top_n_feature_importance_values = np.array(top_n_feature_importance_values)
+    #transpose by swapping first and second axis
+    top_n_feature_importance_values = np.swapaxes(top_n_feature_importance_values, 0, 1)
+    #print shape
+    print("top_n_feature_importance_values shape: ", top_n_feature_importance_values.shape)
+
+    print("typeof top_n_feature_importance_values: ", type(top_n_feature_importance_values))
+
+    #flattened_data = data
+    flattened_data = top_n_feature_importance_values
+    print("typeof flattened_data: ", type(flattened_data))
+    print("reduced feature data shape: ", flattened_data.shape)
+    # calculate mean for each frame (along time axis)
+    flattened_data = flatten_data_by_mean(flattened_data, 2)
     print("flattened data shape: ", flattened_data.shape)
     # normalized_data = normalize_data(data)
     # print("data normalized: ", normalized_data.shape)
@@ -402,6 +424,9 @@ def fit_predict(
     model = clf.fit(x_train, y_train)
     prediction = model.predict(x_test)
     print("Finished random forest prediction.")
+    #export model
+    joblib.dump(model, 'random_forest_model.pkl')
+    print("Model saved to random_forest_model.pkl")
     return model, prediction
 
 
