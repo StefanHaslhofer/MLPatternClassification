@@ -76,6 +76,15 @@ def get_data_for_speakers(speaker_ids, label_metadata, data):
     return selected_data, label_metadata['word'][indices]
 
 
+def filter_by_label(label_filter, label_metadata, data):
+    """
+    filter datapoints by label
+    """
+    condition = np.isin(label_metadata['word'], label_filter)
+    indices = np.where(condition)[0]
+    selected_data = data[indices]
+    return selected_data, label_metadata[indices]
+
 def get_data(label_metadata, data):
     """
     retrieve all recording data alongside labels
