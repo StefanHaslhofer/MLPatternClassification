@@ -12,11 +12,11 @@ from helpers import plot_spectrogram, calc_deltas, flatten_data_by_mean, normali
     get_label_map
 
 # TODO set to True to show graphs
-show_sample_graphs = False
+show_sample_graphs = True
 show_scatter_plot = False
-train_random_forest = True
+train_dummy = False
+train_random_forest = False
 validate_random_forest = True
-
 
 # load from data files provided on moodle
 try:
@@ -26,7 +26,6 @@ try:
 except Exception as e:
     print(f"Failed to load data: {e}")
     raise
-
 
 # Initialize the LabelEncoder
 le = LabelEncoder()
@@ -78,9 +77,11 @@ def plot_error_vs_k(error_holder, m):
 
 
 if show_sample_graphs:
-    plot_spectrogram(data[6000][13:75], 'mfcc-spectrogram', label_metadata[6000])
-    plot_spectrogram(calc_deltas(data[6000][13:75], 1), 'mfcc-spectrogram', label_metadata[6000])
-    plot_spectrogram(calc_deltas(calc_deltas(data[6000][13:75], 1), 1), 'mfcc-spectrogram', label_metadata[6000])
+    None
+    # plot_spectrogram(data[6000][13:75], 'mfcc-spectrogram', label_metadata[6000])
+    # plot_spectrogram(calc_deltas(data[6000][13:75], 1), 'mfcc-spectrogram', label_metadata[6000])
+    # plot_spectrogram(calc_deltas(calc_deltas(data[6000][13:75], 1), 1), 'mfcc-spectrogram', label_metadata[6000])
+
 
 def dummy_cls(data):
     reduced_feature_data = data[:, 13:60]
@@ -111,7 +112,8 @@ def dummy_cls(data):
     return error
 
 
-dummy_cls(data)
+if train_dummy:
+    dummy_cls(data)
 """
 Set up random forests
 """
@@ -125,7 +127,7 @@ def setup_random_forest(data, isTraining):
     # calculate mean for each frame (along axis 1)
     flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
     print("flattened data shape: ", flattened_data.shape)
-    normalized_data = normalize_data(data)
+    # normalized_data = normalize_data(flattened_data)
     # print("data normalized: ", normalized_data.shape)
 
     if (isTraining):
@@ -134,9 +136,9 @@ def setup_random_forest(data, isTraining):
         speaker_test = speaker_ids[int(speaker_ids.size * 0.8):]
 
         # get training data
-        x_train, y_train = get_data_for_speakers(speaker_train, label_metadata, normalized_data)
+        x_train, y_train = get_data_for_speakers(speaker_train, label_metadata, flattened_data)
         # get test data
-        x_test, y_test = get_data_for_speakers(speaker_test, label_metadata, normalized_data)
+        x_test, y_test = get_data_for_speakers(speaker_test, label_metadata, flattened_data)
         return x_train, y_train, x_test, y_test
 
     else:
@@ -171,9 +173,11 @@ if (train_random_forest):
 # validate the models with new data in the validation folder, which contains 5 separate .npy files
 # load from data files provided on moodle
 try:
+    # TODO load all files
     filename = '3_Verena_Staubsauger_an_Alarm_an.npy'  # change filename to test different files
     data_val = np.load(f'validation_data/{filename}')
-    plot_spectrogram(data_val[0][13:75], 'mfcc-spectrogram', ['x', 'y', 'z', 'Verena_Staubsauger_an_Alarm_an'])
+    if show_sample_graphs:
+        plot_spectrogram(data_val[0][13:75], 'mfcc-spectrogram', ['x', 'y', 'z', 'Verena_Staubsauger_an_Alarm_an'])
 except Exception as e:
     print(f"Failed to load data: {e}")
     raise
@@ -192,9 +196,25 @@ if validate_random_forest:
     x_val_rfc = setup_random_forest(data_val, False)
     print("x_val_rfc shape: ", x_val_rfc.shape)
 
+    # TODO iterate over x_val_rfc
+    # heuristic: if the classifier predicts a keyword we assume that no other keyword follows for at least 1s
+    SKIP_SAMPLES = 44
+    word_predicted = False
+    i = 0
     # run random forest on validation data, but only 44 samples at a time
-    for i in range(0, x_val_rfc.shape[1], 1):
-        predictions_rfc = rfc.predict(x_val_rfc[:, i:i + 44])
-        if predictions_rfc != ['18']:
-            print(f"Predicting for samples {i} to {i + 44}")
-            print("Predictions: ", label_map_reverted[int(predictions_rfc[0])])
+    while i < x_val_rfc.shape[1]:
+        prediction_data = x_val_rfc[:, i:i + 44]
+        if np.shape(prediction_data)[1] == 44:
+            predictions_rfc = rfc.predict(prediction_data)
+            if predictions_rfc != ['18']:
+                print(f"Predicting for samples {i} to {i + 44}")
+                print("Predictions: ", label_map_reverted[int(predictions_rfc[0])])
+                word_predicted = True
+        # if word was predicted, advance loop without prediction
+        if word_predicted and i + SKIP_SAMPLES <= x_val_rfc.shape[1]:
+            i += SKIP_SAMPLES
+            word_predicted = False
+        i += 1
+
+
+# TODO export to csv
