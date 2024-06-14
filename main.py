@@ -173,6 +173,7 @@ if (train_random_forest):
 # validate the models with new data in the validation folder, which contains 5 separate .npy files
 # load from data files provided on moodle
 try:
+    # TODO load all files
     filename = '3_Verena_Staubsauger_an_Alarm_an.npy'  # change filename to test different files
     data_val = np.load(f'validation_data/{filename}')
     if show_sample_graphs:
@@ -195,6 +196,7 @@ if validate_random_forest:
     x_val_rfc = setup_random_forest(data_val, False)
     print("x_val_rfc shape: ", x_val_rfc.shape)
 
+    # TODO iterate over x_val_rfc
     # heuristic: if the classifier predicts a keyword we assume that no other keyword follows for at least 1s
     SKIP_SAMPLES = 44
     word_predicted = False
@@ -213,3 +215,6 @@ if validate_random_forest:
             i += SKIP_SAMPLES
             word_predicted = False
         i += 1
+
+
+# TODO export to csv
