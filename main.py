@@ -14,7 +14,8 @@ from helpers import plot_spectrogram, calc_deltas, flatten_data_by_mean, normali
 # TODO set to True to show graphs
 show_sample_graphs = False
 show_scatter_plot = False
-train_random_forest = True
+train_dummy = False
+train_random_forest = False
 validate_random_forest = True
 
 
@@ -111,7 +112,8 @@ def dummy_cls(data):
     return error
 
 
-dummy_cls(data)
+if train_dummy:
+    dummy_cls(data)
 """
 Set up random forests
 """
@@ -125,8 +127,8 @@ def setup_random_forest(data, isTraining):
     # calculate mean for each frame (along axis 1)
     flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
     print("flattened data shape: ", flattened_data.shape)
-    normalized_data = normalize_data(data)
-    # print("data normalized: ", normalized_data.shape)
+    normalized_data = normalize_data(flattened_data)
+    print("data normalized: ", normalized_data.shape)
 
     if (isTraining):
         # 80% - 20% | train - test split
@@ -171,9 +173,10 @@ if (train_random_forest):
 # validate the models with new data in the validation folder, which contains 5 separate .npy files
 # load from data files provided on moodle
 try:
-    filename = '3_Verena_Staubsauger_an_Alarm_an.npy'  # change filename to test different files
+    filename = '2_Florian_Heizung_aus.npy'  # change filename to test different files
     data_val = np.load(f'validation_data/{filename}')
-    plot_spectrogram(data_val[0][13:75], 'mfcc-spectrogram', ['x', 'y', 'z', 'Verena_Staubsauger_an_Alarm_an'])
+    if show_sample_graphs:
+        plot_spectrogram(data_val[0][13:75], 'mfcc-spectrogram', ['x', 'y', 'z', 'Verena_Staubsauger_an_Alarm_an'])
 except Exception as e:
     print(f"Failed to load data: {e}")
     raise
@@ -194,7 +197,11 @@ if validate_random_forest:
 
     # run random forest on validation data, but only 44 samples at a time
     for i in range(0, x_val_rfc.shape[1], 1):
-        predictions_rfc = rfc.predict(x_val_rfc[:, i:i + 44])
-        if predictions_rfc != ['18']:
-            print(f"Predicting for samples {i} to {i + 44}")
-            print("Predictions: ", label_map_reverted[int(predictions_rfc[0])])
+        prediction_data = x_val_rfc[:, i:i + 44]
+        if np.shape(prediction_data)[1] == 44:
+            predictions_rfc = rfc.predict(prediction_data)
+            if predictions_rfc != ['18']:
+                print(f"Predicting for samples {i} to {i + 44}")
+                print("Predictions: ", label_map_reverted[int(predictions_rfc[0])])
+
+    # TODO implement Stefan
