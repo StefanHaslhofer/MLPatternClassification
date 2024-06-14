@@ -1,3 +1,5 @@
+import csv
+
 import joblib
 import numpy as np
 import sklearn
@@ -13,7 +15,7 @@ from helpers import plot_spectrogram, calc_deltas, flatten_data_by_mean, normali
     get_label_map
 
 # TODO set to True to show graphs
-show_sample_graphs = True
+show_sample_graphs = False
 show_scatter_plot = False
 train_dummy = False
 train_random_forest = False
@@ -179,8 +181,10 @@ if (train_random_forest):
 development_scenes_path = 'development_scenes_npy/development_scenes'
 file_names = os.listdir(development_scenes_path)
 
+results = []
+
 for file_name in file_names:
-    try: # change filename to test different files
+    try:  # change filename to test different files
         data_val = np.load(f'{development_scenes_path}/{file_name}')
         # swap axis 0 and 1, to have the array transposed
         np.transpose(data_val)
@@ -205,7 +209,8 @@ for file_name in file_names:
         x_val_rfc = setup_random_forest(data_val, False)
         print("x_val_rfc shape: ", x_val_rfc.shape)
 
-        # TODO iterate over x_val_rfc
+        # TODO iterate over x_val_rfc ????????
+
         # heuristic: if the classifier predicts a keyword we assume that no other keyword follows for at least 1s
         SKIP_SAMPLES = 44
         word_predicted = False
@@ -219,11 +224,20 @@ for file_name in file_names:
                     print(f"Predicting for samples {i} to {i + 44}")
                     print("Predictions: ", label_map_reverted[int(predictions_rfc[0])])
                     word_predicted = True
+                    base_filename = os.path.splitext(file_name)[0]
+                    timestamp = i * 0.025
+                    results.append((base_filename, label_map_reverted[int(predictions_rfc[0])], round(timestamp,3)))
             # if word was predicted, advance loop without prediction
             if word_predicted and i + SKIP_SAMPLES <= x_val_rfc.shape[1]:
                 i += SKIP_SAMPLES
                 word_predicted = False
             i += 1
 
+with open('results.csv', mode='w', newline='') as file:
+    writer = csv.writer(file)
+    writer.writerow(["filename", "command", "timestamp"])
+    for result in results:
+        writer.writerow(result)
 
-# TODO export to csv
+print("Results written to results.csv")
+
