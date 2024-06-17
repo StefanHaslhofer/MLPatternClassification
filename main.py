@@ -12,13 +12,14 @@ from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 import os
 
 from helpers import plot_spectrogram, calc_deltas, flatten_data_by_mean, normalize_data, get_data_for_speakers, \
-    get_label_map
+    get_label_map, filter_by_label
 
 # TODO set to True to show graphs
 show_sample_graphs = False
 show_scatter_plot = False
 train_dummy = False
 train_random_forest = False
+train_command_random_forest = False
 validate_random_forest = True
 
 # load from data files provided on moodle
@@ -123,7 +124,7 @@ Set up random forests
 RSEED = 10
 
 
-def setup_random_forest(data, isTraining):
+def setup_random_forest(data, label_metadata, isTraining):
     # only use mfcc (also cut away mfcc bin 0 and upper bins)
     reduced_feature_data = data[:, 13:60]
     print("reduced feature data shape: ", reduced_feature_data.shape)
@@ -164,7 +165,7 @@ def fit_predict(
 
 
 if (train_random_forest):
-    x_train, y_train, x_test, y_test = setup_random_forest(data, train_random_forest)
+    x_train, y_train, x_test, y_test = setup_random_forest(data, label_metadata, train_random_forest)
     model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED)
     # error_train = mean_zero_one_loss(y_train, predictions)
     error_test = mean_zero_one_loss(y_test, predictions)
@@ -172,6 +173,18 @@ if (train_random_forest):
 
     # save model
     joblib.dump(model, "random_forest_model.pkl")
+
+if (train_command_random_forest):
+    command_data = filter_by_label(['13', '14', '18'], label_metadata, data)
+    x_train, y_train, x_test, y_test = setup_random_forest(command_data[0], command_data[1],
+                                                           train_command_random_forest)
+    model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED)
+    # error_train = mean_zero_one_loss(y_train, predictions)
+    error_test = mean_zero_one_loss(y_test, predictions)
+    print(f"command random forest error: {error_test}")
+
+    # save model
+    joblib.dump(model, "command_random_forest_model.pkl")
 
 # validate the models with new data in the validation folder, which contains 5 separate .npy files
 # load from data files provided on moodle
@@ -183,7 +196,6 @@ def validate_and_export_predictions():
     file_names = os.listdir(development_scenes_path)
 
     results = []
-
     for file_name in file_names:
         try:
             data_val = np.load(f'{development_scenes_path}/{file_name}')
@@ -198,6 +210,7 @@ def validate_and_export_predictions():
 
         print("Loaded validation data, with shape: ", data_val.shape)
         rfc = joblib.load("random_forest_model.pkl")
+        crfc = joblib.load("command_random_forest_model.pkl")
 
         label_map = get_label_map(le)
         print("Label map: ", label_map)
@@ -207,7 +220,7 @@ def validate_and_export_predictions():
 
         if validate_random_forest:
             # setup data for validation for random forest
-            x_val_rfc = setup_random_forest(data_val, False)
+            x_val_rfc = setup_random_forest(data_val, label_metadata, False)
             print("x_val_rfc shape: ", x_val_rfc.shape)
 
             # heuristic: if the classifier predicts a keyword we assume that no other keyword follows for at least 1s
@@ -228,8 +241,15 @@ def validate_and_export_predictions():
                         results.append((base_filename, label_map_reverted[int(predictions_rfc[0])], round(timestamp, 3)))
                 # if word was predicted, advance loop without prediction
                 if word_predicted and i + SKIP_SAMPLES <= x_val_rfc.shape[1]:
-                    i += SKIP_SAMPLES
-                    word_predicted = False
+                    # heuristic: if a word is recognized a command must follow in the next 1.1 seconds
+                    for j in range(i, i + SKIP_SAMPLES * 5):
+                        predictions_crfc = crfc.predict(x_val_rfc[:, j:j + 44])
+                        if predictions_crfc != ['18']:
+                            print(f"Predicting for samples {j} to {j + 44}")
+                            print("Predictions: ", label_map_reverted[int(predictions_crfc[0])])
+                            break
+                        i += SKIP_SAMPLES
+                        word_predicted = False
                 i += 1
 
     with open('results.csv', mode='w', newline='') as file:
