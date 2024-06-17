@@ -89,10 +89,10 @@ if show_sample_graphs:
 
 def dummy_cls(data):
     reduced_feature_data = data[:, 13:60]
-    print("reduced feature data shape: ", reduced_feature_data.shape)
+    # print("reduced feature data shape: ", reduced_feature_data.shape)
     # calculate mean for each frame (along axis 1)
     flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
-    print("flattened data shape: ", flattened_data.shape)
+    # print("flattened data shape: ", flattened_data.shape)
     normalized_data = normalize_data(flattened_data)
 
     X_train, X_test, y_train, y_test = train_test_split(normalized_data, label_metadata['word'], test_size=0.2,
@@ -127,10 +127,12 @@ RSEED = 10
 def setup_random_forest(data, label_metadata, isTraining):
     # only use mfcc (also cut away mfcc bin 0 and upper bins)
     reduced_feature_data = data[:, 13:60]
-    print("reduced feature data shape: ", reduced_feature_data.shape)
+    if isTraining:
+        print("reduced feature data shape: ", reduced_feature_data.shape)
     # calculate mean for each frame (along axis 1)
     flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
-    print("flattened data shape: ", flattened_data.shape)
+    if isTraining:
+        print("flattened data shape: ", flattened_data.shape)
     # normalized_data = normalize_data(flattened_data)
     # print("data normalized: ", normalized_data.shape)
 
@@ -197,26 +199,27 @@ def validate_and_export_predictions():
 
     results = []
     for file_name in file_names:
+        print(f"Filename: {file_name}")
         try:
             data_val = np.load(f'{development_scenes_path}/{file_name}')
             # swap axis 0 and 1, to have the array transposed
             np.transpose(data_val)
             data_val = np.expand_dims(data_val, axis=0)
             if show_sample_graphs:
-                plot_spectrogram(data_val[0][13:75], 'mfcc-spectrogram', ['x', 'y', 'z', 'Verena_Staubsauger_an_Alarm_an'])
+                plot_spectrogram(data_val[0][13:75], 'mfcc-spectrogram', ['x', 'y', 'z', file_name])
         except Exception as e:
             print(f"Failed to load data: {e}")
             raise
 
-        print("Loaded validation data, with shape: ", data_val.shape)
+        # print("Loaded validation data, with shape: ", data_val.shape)
         rfc = joblib.load("random_forest_model.pkl")
         crfc = joblib.load("command_random_forest_model.pkl")
 
         label_map = get_label_map(le)
-        print("Label map: ", label_map)
+        # print("Label map: ", label_map)
         # revert key value pairs in label map
         label_map_reverted = {v: k for k, v in label_map.items()}
-        print("Label map reverted: ", label_map_reverted)
+        # print("Label map reverted: ", label_map_reverted)
 
         if validate_random_forest:
             # setup data for validation for random forest
@@ -224,12 +227,13 @@ def validate_and_export_predictions():
             print("x_val_rfc shape: ", x_val_rfc.shape)
 
             # heuristic: if the classifier predicts a keyword we assume that no other keyword follows for at least 1s
-            SKIP_SAMPLES = 44
+            SKIP_SAMPLES = 44 * 2
             word_predicted = False
             i = 0
             # run random forest on validation data, but only 44 samples at a time
             while i < x_val_rfc.shape[1]:
                 prediction_data = x_val_rfc[:, i:i + 44]
+
                 if np.shape(prediction_data)[1] == 44:
                     predictions_rfc = rfc.predict(prediction_data)
                     if predictions_rfc != ['18']:
@@ -239,17 +243,21 @@ def validate_and_export_predictions():
                         base_filename = os.path.splitext(file_name)[0]
                         timestamp = i * 0.025
                         results.append((base_filename, label_map_reverted[int(predictions_rfc[0])], round(timestamp, 3)))
+
                 # if word was predicted, advance loop without prediction
-                if word_predicted and i + SKIP_SAMPLES <= x_val_rfc.shape[1]:
+                if word_predicted and i + SKIP_SAMPLES + 44 < x_val_rfc.shape[1]:
                     # heuristic: if a word is recognized a command must follow in the next 1.1 seconds
-                    for j in range(i, i + SKIP_SAMPLES * 5):
+                    for j in range(i, i + SKIP_SAMPLES):
                         predictions_crfc = crfc.predict(x_val_rfc[:, j:j + 44])
                         if predictions_crfc != ['18']:
                             print(f"Predicting for samples {j} to {j + 44}")
                             print("Predictions: ", label_map_reverted[int(predictions_crfc[0])])
                             break
-                        i += SKIP_SAMPLES
-                        word_predicted = False
+
+                if word_predicted:
+                    i += SKIP_SAMPLES
+                    word_predicted = False
+
                 i += 1
 
     with open('results.csv', mode='w', newline='') as file:
