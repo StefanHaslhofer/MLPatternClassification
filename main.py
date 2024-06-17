@@ -177,67 +177,68 @@ if (train_random_forest):
 # load from data files provided on moodle
 
 
-# Step 2: Define the directory path
-development_scenes_path = 'development_scenes_npy/development_scenes'
-file_names = os.listdir(development_scenes_path)
+def validate_and_export_predictions():
+    # Define the directory path
+    development_scenes_path = 'development_scenes_npy/development_scenes'
+    file_names = os.listdir(development_scenes_path)
 
-results = []
+    results = []
 
-for file_name in file_names:
-    try:  # change filename to test different files
-        data_val = np.load(f'{development_scenes_path}/{file_name}')
-        # swap axis 0 and 1, to have the array transposed
-        np.transpose(data_val)
-        data_val = np.expand_dims(data_val, axis=0)
-        if show_sample_graphs:
-            plot_spectrogram(data_val[0][13:75], 'mfcc-spectrogram', ['x', 'y', 'z', 'Verena_Staubsauger_an_Alarm_an'])
-    except Exception as e:
-        print(f"Failed to load data: {e}")
-        raise
+    for file_name in file_names:
+        try:
+            data_val = np.load(f'{development_scenes_path}/{file_name}')
+            # swap axis 0 and 1, to have the array transposed
+            np.transpose(data_val)
+            data_val = np.expand_dims(data_val, axis=0)
+            if show_sample_graphs:
+                plot_spectrogram(data_val[0][13:75], 'mfcc-spectrogram', ['x', 'y', 'z', 'Verena_Staubsauger_an_Alarm_an'])
+        except Exception as e:
+            print(f"Failed to load data: {e}")
+            raise
 
-    print("Loaded validation data, with shape: ", data_val.shape)
-    rfc = joblib.load("random_forest_model.pkl")
+        print("Loaded validation data, with shape: ", data_val.shape)
+        rfc = joblib.load("random_forest_model.pkl")
 
-    label_map = get_label_map(le)
-    print("Label map: ", label_map)
-    # revert key value pairs in label map
-    label_map_reverted = {v: k for k, v in label_map.items()}
-    print("Label map reverted: ", label_map_reverted)
+        label_map = get_label_map(le)
+        print("Label map: ", label_map)
+        # revert key value pairs in label map
+        label_map_reverted = {v: k for k, v in label_map.items()}
+        print("Label map reverted: ", label_map_reverted)
 
-    if validate_random_forest:
-        # setup data for validation for random forest
-        x_val_rfc = setup_random_forest(data_val, False)
-        print("x_val_rfc shape: ", x_val_rfc.shape)
+        if validate_random_forest:
+            # setup data for validation for random forest
+            x_val_rfc = setup_random_forest(data_val, False)
+            print("x_val_rfc shape: ", x_val_rfc.shape)
 
-        # TODO iterate over x_val_rfc ????????
+            # heuristic: if the classifier predicts a keyword we assume that no other keyword follows for at least 1s
+            SKIP_SAMPLES = 44
+            word_predicted = False
+            i = 0
+            # run random forest on validation data, but only 44 samples at a time
+            while i < x_val_rfc.shape[1]:
+                prediction_data = x_val_rfc[:, i:i + 44]
+                if np.shape(prediction_data)[1] == 44:
+                    predictions_rfc = rfc.predict(prediction_data)
+                    if predictions_rfc != ['18']:
+                        print(f"Predicting for samples {i} to {i + 44}")
+                        print("Predictions: ", label_map_reverted[int(predictions_rfc[0])])
+                        word_predicted = True
+                        base_filename = os.path.splitext(file_name)[0]
+                        timestamp = i * 0.025
+                        results.append((base_filename, label_map_reverted[int(predictions_rfc[0])], round(timestamp, 3)))
+                # if word was predicted, advance loop without prediction
+                if word_predicted and i + SKIP_SAMPLES <= x_val_rfc.shape[1]:
+                    i += SKIP_SAMPLES
+                    word_predicted = False
+                i += 1
 
-        # heuristic: if the classifier predicts a keyword we assume that no other keyword follows for at least 1s
-        SKIP_SAMPLES = 44
-        word_predicted = False
-        i = 0
-        # run random forest on validation data, but only 44 samples at a time
-        while i < x_val_rfc.shape[1]:
-            prediction_data = x_val_rfc[:, i:i + 44]
-            if np.shape(prediction_data)[1] == 44:
-                predictions_rfc = rfc.predict(prediction_data)
-                if predictions_rfc != ['18']:
-                    print(f"Predicting for samples {i} to {i + 44}")
-                    print("Predictions: ", label_map_reverted[int(predictions_rfc[0])])
-                    word_predicted = True
-                    base_filename = os.path.splitext(file_name)[0]
-                    timestamp = i * 0.025
-                    results.append((base_filename, label_map_reverted[int(predictions_rfc[0])], round(timestamp,3)))
-            # if word was predicted, advance loop without prediction
-            if word_predicted and i + SKIP_SAMPLES <= x_val_rfc.shape[1]:
-                i += SKIP_SAMPLES
-                word_predicted = False
-            i += 1
+    with open('results.csv', mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["filename", "command", "timestamp"])
+        for result in results:
+            writer.writerow(result)
 
-with open('results.csv', mode='w', newline='') as file:
-    writer = csv.writer(file)
-    writer.writerow(["filename", "command", "timestamp"])
-    for result in results:
-        writer.writerow(result)
+    print("Results written to results.csv")
 
-print("Results written to results.csv")
 
+validate_and_export_predictions()
