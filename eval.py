@@ -7,7 +7,7 @@ import helpers
 
 # sort feature importance map by value
 #sorted_feature_importances_map = dict(sorted(feature_importances_map.items(), key=lambda item: item[1], reverse=True))
-most_important_features = helpers.get_most_important_features_names(20)
+most_important_features = helpers.get_most_important_features_names(10)
 
 print("sorted: ",most_important_features)
 
