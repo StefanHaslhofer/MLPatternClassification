@@ -1,6 +1,7 @@
 import csv
 
 import joblib
+import joblib
 import numpy as np
 import sklearn
 from matplotlib import pyplot as plt
@@ -13,6 +14,8 @@ import os
 
 from helpers import plot_spectrogram, calc_deltas, flatten_data_by_mean, normalize_data, get_data_for_speakers, \
     get_label_map, filter_by_label
+
+import helpers
 
 # TODO set to True to show graphs
 show_sample_graphs = False
@@ -30,7 +33,6 @@ try:
 except Exception as e:
     print(f"Failed to load data: {e}")
     raise
-
 # Initialize the LabelEncoder
 le = LabelEncoder()
 
@@ -47,6 +49,48 @@ np.random.shuffle(speaker_ids)
 speaker_splits_ids = np.array_split(speaker_ids, n)
 
 
+def calc_deltas(data):
+    """
+    calculate the change (delta) of the frequency energy over time
+    """
+    deltas = np.diff(data, axis=2)
+    # trailing_zeros = np.zeros(shape=(deltas.shape[0] ,deltas.shape[1], 1))
+    # deltas = np.concatenate((deltas, trailing_zeros), axis=2)
+    # return np.append(data, deltas, axis=1)
+    return deltas
+
+
+def setup_knn(data):
+    # only use mfcc (also cut away mfcc bin 0 and upper bins)
+    reduced_feature_data = data[:, 13:60]
+    print("reduced feature data shape: ", reduced_feature_data.shape)
+    # delta_features = append_deltas(reduced_feature_data)
+    # calculate mean for each frame (along axis 1)
+    flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
+    print("flattened data shape: ", flattened_data.shape)
+    # don't normalize spectrograms
+    # normalized_data = normalize_data(data)
+    # print("data normalized: ", normalized_data.shape)
+
+    recording_folds = []
+    for fold_idx, fold in enumerate(speaker_splits_ids):
+        print(f"Retrieving data for fold {fold_idx + 1}/{n}")
+        fold_data, fold_labels = get_data_for_speakers(fold, label_metadata, flattened_data)
+        recording_folds.append({'data': fold_data, 'labels': fold_labels})
+        print(f"Retrieved {len(fold_data)} samples with labels.")
+
+    return recording_folds
+
+
+
+#recording_folds = setup_knn(data)
+
+"""
+Set up SVM
+"""
+
+
+# Append the labels to the data, assume that the labels are in the same order as the data
 def append_labels(data, labels):
     """
     Append the labels to the data using NumPy's column_stack function.

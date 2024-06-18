@@ -148,6 +148,49 @@ label_map = get_label_map(le)
 label_map_reverted = {v: k for k, v in label_map.items()}
 print(label_map_reverted)
 
-
 def convert_int_to_label(label_index):
     return label_map_reverted[label_index]
+
+
+## FEATURE IMPORTANCE SECTION DO NOT TOUCH!!!!!!!!
+
+#load model
+rfc = joblib.load('random_forest_model.pkl')
+feature_importances = rfc.feature_importances_
+
+#load csv file with feature names and their index
+featurescsv = 'metadata/idx_to_feature_name.csv'
+
+#load first column of csv file into list
+feature_names = []
+with open(featurescsv) as f:
+    for line in f:
+        feature_names.append(line.split(',')[1].strip())
+#remove first entry as it is the header
+feature_names.pop(0)
+
+def get_feature_name_from_index(index):
+    return feature_names[index]
+
+
+# save feature importance into map with feature name as key and importance as value
+feature_importances_map = {}
+for i in range(len(feature_importances)):
+    name = get_feature_name_from_index(i)
+    feature_importances_map[name] = feature_importances[i]
+
+# sort feature importance map by value
+sorted_feature_importances_map = dict(sorted(feature_importances_map.items(), key=lambda item: item[1], reverse=True))
+
+def get_most_important_features_names(n):
+    """
+    Get the n most important features from a sorted feature importance map
+
+    :param sorted_feature_importances_map: dictionary with feature names as keys and importance as values
+    :param n: number of most important features to return
+    :return: list of n most important features
+    """
+    return list(sorted_feature_importances_map.keys())[:n]
+
+def get_feature_index_from_name(name):
+    return feature_names.index(name)
