@@ -1,5 +1,4 @@
 import csv
-
 import joblib
 import joblib
 import numpy as np
@@ -92,26 +91,14 @@ Set up SVM
 
 # Append the labels to the data, assume that the labels are in the same order as the data
 def append_labels(data, labels):
-    """
-    Append the labels to the data using NumPy's column_stack function.
-    """
-    # Convert labels to a 2D array with shape (n, 1)
     labels_2d = labels.reshape(-1, 1)
-    # Check if the number of rows in data and labels_2d match
     if data.shape[0] != labels_2d.shape[0]:
         raise ValueError(f"Number of rows in data ({data.shape[0]}) and labels ({labels_2d.shape[0]}) do not match.")
-    # Use np.column_stack to append labels to the data
     appended_data = np.column_stack((data, labels_2d))
     return appended_data
 
 
 def mean_zero_one_loss(true_label, pred_label):
-    """
-    Function that calculates the mean zero-one loss for given true and predicted la
-    @param true_label, np array, true labels
-    @param pred_label, np array, predicted labels
-    @output loss, float, mean zero-one loss
-    """
     loss = sklearn.metrics.zero_one_loss(true_label, pred_label)
     return loss
 
@@ -126,33 +113,22 @@ def plot_error_vs_k(error_holder, m):
 
 if show_sample_graphs:
     None
-    # plot_spectrogram(data[6000][13:75], 'mfcc-spectrogram', label_metadata[6000])
-    # plot_spectrogram(calc_deltas(data[6000][13:75], 1), 'mfcc-spectrogram', label_metadata[6000])
-    # plot_spectrogram(calc_deltas(calc_deltas(data[6000][13:75], 1), 1), 'mfcc-spectrogram', label_metadata[6000])
 
 
 def dummy_cls(data):
     reduced_feature_data = data[:, 13:60]
     # print("reduced feature data shape: ", reduced_feature_data.shape)
-    # calculate mean for each frame (along axis 1)
     flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
     # print("flattened data shape: ", flattened_data.shape)
     normalized_data = normalize_data(flattened_data)
 
     X_train, X_test, y_train, y_test = train_test_split(normalized_data, label_metadata['word'], test_size=0.2,
                                                         random_state=42)
-    # Create a baseline random classifier
     dummy_clf = DummyClassifier(strategy='stratified', random_state=42)
     dummy_clf.fit(X_train, y_train)
-
-    # Make predictions on the test data
     y_pred = dummy_clf.predict(X_test)
-
-    # Calculate accuracy and other metrics
     error = mean_zero_one_loss(y_test, y_pred)
     report = classification_report(y_test, y_pred)
-
-    # Print the results
     print("Baseline Classifier Error:", error)
     print("Classification Report:")
     print(report)
@@ -162,32 +138,23 @@ def dummy_cls(data):
 
 if train_dummy:
     dummy_cls(data)
-"""
-Set up random forests
-"""
+
+
 RSEED = 10
 
 
 def setup_random_forest(data, label_metadata, isTraining):
-    # only use mfcc (also cut away mfcc bin 0 and upper bins)
     reduced_feature_data = data[:, 13:60]
     if isTraining:
         print("reduced feature data shape: ", reduced_feature_data.shape)
-    # calculate mean for each frame (along axis 1)
     flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
     if isTraining:
         print("flattened data shape: ", flattened_data.shape)
-    # normalized_data = normalize_data(flattened_data)
-    # print("data normalized: ", normalized_data.shape)
 
-    if (isTraining):
-        # 80% - 20% | train - test split
+    if isTraining:
         speaker_train = speaker_ids[:int(speaker_ids.size * 0.8)]
         speaker_test = speaker_ids[int(speaker_ids.size * 0.8):]
-
-        # get training data
         x_train, y_train = get_data_for_speakers(speaker_train, label_metadata, flattened_data)
-        # get test data
         x_test, y_test = get_data_for_speakers(speaker_test, label_metadata, flattened_data)
         return x_train, y_train, x_test, y_test
 
@@ -195,30 +162,35 @@ def setup_random_forest(data, label_metadata, isTraining):
         return flattened_data
 
 
-def fit_predict(
-        x_train: np.ndarray,
-        y_train: np.ndarray,
-        x_test: np.ndarray,
-        y_test: np.ndarray,
-        rseed: int
-) -> tuple[RandomForestClassifier, np.ndarray]:
+def fit_predict(x_train, y_train, x_test, y_test, rseed, params) -> tuple[RandomForestClassifier, np.ndarray]:
     print(f"Train random forest classifier with {x_train.shape[0]} samples.")
-    clf = RandomForestClassifier(random_state=rseed)
+    clf = RandomForestClassifier(random_state=rseed, **params)
     model = clf.fit(x_train, y_train)
     prediction = model.predict(x_test)
     print("Finished random forest prediction.")
     return model, prediction
 
 
-if (train_random_forest):
-    x_train, y_train, x_test, y_test = setup_random_forest(data, label_metadata, train_random_forest)
-    model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED)
-    # error_train = mean_zero_one_loss(y_train, predictions)
-    error_test = mean_zero_one_loss(y_test, predictions)
-    print(f"random forest error: {error_test}")
+def evaluate_model(y_test, predictions):
+    accuracy = accuracy_score(y_test, predictions)
+    report = classification_report(y_test, predictions)
+    return accuracy, report
 
-    # save model
-    joblib.dump(model, "random_forest_model.pkl")
+
+if train_random_forest:
+    x_train, y_train, x_test, y_test = setup_random_forest(data, label_metadata, train_random_forest)
+
+    # Define hyperparameter grid
+    hyperparams_grid = [
+        {'n_estimators': 100, 'max_depth': 10},
+        {'n_estimators': 200, 'max_depth': 20},
+        {'n_estimators': 300, 'max_depth': 30},
+        {'n_estimators': 100, 'max_depth': None},
+        {'n_estimators': 200, 'max_depth': None},
+    ]
+
+    best_accuracy = 0
+    best_params = None
 
 if (train_command_random_forest):
     command_data = filter_by_label(['13', '14', '18'], label_metadata, data)
@@ -234,7 +206,21 @@ if (train_command_random_forest):
 
 # validate the models with new data in the validation folder, which contains 5 separate .npy files
 # load from data files provided on moodle
+    for params in hyperparams_grid:
+        print(f"Testing parameters: {params}")
+        model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED, params)
+        accuracy, report = evaluate_model(y_test, predictions)
+        print(f"Accuracy: {accuracy}\n{report}")
 
+        if accuracy > best_accuracy:
+            best_accuracy = accuracy
+            best_params = params
+
+    print(f"Best accuracy: {best_accuracy} with params: {best_params}")
+
+    # Save the best model
+    model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED, best_params)
+    joblib.dump(model, "random_forest_model_best.pkl")
 
 def validate_and_export_predictions():
     # Define the directory path
@@ -242,11 +228,11 @@ def validate_and_export_predictions():
     file_names = os.listdir(development_scenes_path)
 
     results = []
+
     for file_name in file_names:
         print(f"Filename: {file_name}")
         try:
             data_val = np.load(f'{development_scenes_path}/{file_name}')
-            # swap axis 0 and 1, to have the array transposed
             np.transpose(data_val)
             data_val = np.expand_dims(data_val, axis=0)
             if show_sample_graphs:
@@ -255,19 +241,15 @@ def validate_and_export_predictions():
             print(f"Failed to load data: {e}")
             raise
 
-        # print("Loaded validation data, with shape: ", data_val.shape)
-        rfc = joblib.load("random_forest_model.pkl")
+        #print("Loaded validation data, with shape: ", data_val.shape)
+        rfc = joblib.load("random_forest_model_best.pkl")
         crfc = joblib.load("command_random_forest_model.pkl")
 
         label_map = get_label_map(le)
-        # print("Label map: ", label_map)
-        # revert key value pairs in label map
         label_map_reverted = {v: k for k, v in label_map.items()}
-        # print("Label map reverted: ", label_map_reverted)
 
         if validate_random_forest:
-            # setup data for validation for random forest
-            x_val_rfc = setup_random_forest(data_val, label_metadata, False)
+            x_val_rfc = setup_random_forest(data_val, label_metadata,False)
             print("x_val_rfc shape: ", x_val_rfc.shape)
 
             # heuristic: if the classifier predicts a keyword we assume that no other keyword follows for at least 1s
