@@ -1,6 +1,5 @@
 import csv
 import joblib
-import joblib
 import numpy as np
 import sklearn
 from matplotlib import pyplot as plt
@@ -8,13 +7,11 @@ from sklearn.dummy import DummyClassifier
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import LabelEncoder, MinMaxScaler
+from sklearn.preprocessing import LabelEncoder
 import os
 
-from helpers import plot_spectrogram, calc_deltas, flatten_data_by_mean, normalize_data, get_data_for_speakers, \
-    get_label_map, filter_by_label
-
-import helpers
+from helpers import plot_spectrogram, flatten_data_by_mean, normalize_data, get_data_for_speakers, get_label_map, \
+    filter_by_label
 
 # TODO set to True to show graphs
 show_sample_graphs = False
@@ -46,48 +43,6 @@ n = 10
 speaker_ids = np.unique(label_metadata['speaker_id'])
 np.random.shuffle(speaker_ids)
 speaker_splits_ids = np.array_split(speaker_ids, n)
-
-
-def calc_deltas(data):
-    """
-    calculate the change (delta) of the frequency energy over time
-    """
-    deltas = np.diff(data, axis=2)
-    # trailing_zeros = np.zeros(shape=(deltas.shape[0] ,deltas.shape[1], 1))
-    # deltas = np.concatenate((deltas, trailing_zeros), axis=2)
-    # return np.append(data, deltas, axis=1)
-    return deltas
-
-
-def setup_knn(data):
-    # only use mfcc (also cut away mfcc bin 0 and upper bins)
-    reduced_feature_data = data[:, 13:60]
-    print("reduced feature data shape: ", reduced_feature_data.shape)
-    # delta_features = append_deltas(reduced_feature_data)
-    # calculate mean for each frame (along axis 1)
-    flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
-    print("flattened data shape: ", flattened_data.shape)
-    # don't normalize spectrograms
-    # normalized_data = normalize_data(data)
-    # print("data normalized: ", normalized_data.shape)
-
-    recording_folds = []
-    for fold_idx, fold in enumerate(speaker_splits_ids):
-        print(f"Retrieving data for fold {fold_idx + 1}/{n}")
-        fold_data, fold_labels = get_data_for_speakers(fold, label_metadata, flattened_data)
-        recording_folds.append({'data': fold_data, 'labels': fold_labels})
-        print(f"Retrieved {len(fold_data)} samples with labels.")
-
-    return recording_folds
-
-
-
-#recording_folds = setup_knn(data)
-
-"""
-Set up SVM
-"""
-
 
 # Append the labels to the data, assume that the labels are in the same order as the data
 def append_labels(data, labels):
@@ -139,12 +94,11 @@ def dummy_cls(data):
 if train_dummy:
     dummy_cls(data)
 
-
 RSEED = 10
 
 
 def setup_random_forest(data, label_metadata, isTraining):
-    reduced_feature_data = data[:, 13:60]
+    reduced_feature_data = data[:, 13:75]
     if isTraining:
         print("reduced feature data shape: ", reduced_feature_data.shape)
     flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
@@ -192,35 +146,39 @@ if train_random_forest:
     best_accuracy = 0
     best_params = None
 
+    model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED, {'n_estimators': 200, 'max_depth': 20})
+    accuracy, report = evaluate_model(y_test, predictions)
+    print(f"Accuracy: {accuracy}\n{report}")
+
+    best_params = {'n_estimators': 200, 'max_depth': 20}
     # validate the models with new data in the validation folder, which contains 5 separate .npy files
     # load from data files provided on moodle
-    for params in hyperparams_grid:
-        print(f"Testing parameters: {params}")
-        model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED, params)
-        accuracy, report = evaluate_model(y_test, predictions)
-        print(f"Accuracy: {accuracy}\n{report}")
-
-        if accuracy > best_accuracy:
-            best_accuracy = accuracy
-            best_params = params
+    # for params in hyperparams_grid:
+    #     print(f"Testing parameters: {params}")
+    #     model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED, params)
+    #     accuracy, report = evaluate_model(y_test, predictions)
+    #     print(f"Accuracy: {accuracy}\n{report}")
+    #
+    #     if accuracy > best_accuracy:
+    #         best_accuracy = accuracy
+    #         best_params = params
 
     print(f"Best accuracy: {best_accuracy} with params: {best_params}")
 
-    # Save the best model
-    model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED, best_params)
     joblib.dump(model, "random_forest_model_best.pkl")
 
 if (train_command_random_forest):
     command_data = filter_by_label(['13', '14', '18'], label_metadata, data)
     x_train, y_train, x_test, y_test = setup_random_forest(command_data[0], command_data[1],
                                                            train_command_random_forest)
-    model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED)
+    model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED, {})
     # error_train = mean_zero_one_loss(y_train, predictions)
     error_test = mean_zero_one_loss(y_test, predictions)
     print(f"command random forest error: {error_test}")
 
     # save model
     joblib.dump(model, "command_random_forest_model.pkl")
+
 
 def validate_and_export_predictions():
     # Define the directory path
@@ -230,6 +188,7 @@ def validate_and_export_predictions():
     results = []
 
     for file_name in file_names:
+        base_filename = os.path.splitext(file_name)[0]
         print(f"Filename: {file_name}")
         try:
             data_val = np.load(f'{development_scenes_path}/{file_name}')
@@ -241,50 +200,53 @@ def validate_and_export_predictions():
             print(f"Failed to load data: {e}")
             raise
 
-        #print("Loaded validation data, with shape: ", data_val.shape)
+        # print("Loaded validation data, with shape: ", data_val.shape)
         rfc = joblib.load("random_forest_model_best.pkl")
         crfc = joblib.load("command_random_forest_model.pkl")
 
         label_map = get_label_map(le)
         label_map_reverted = {v: k for k, v in label_map.items()}
 
-        if validate_random_forest:
-            x_val_rfc = setup_random_forest(data_val, label_metadata,False)
-            print("x_val_rfc shape: ", x_val_rfc.shape)
+        x_val_rfc = setup_random_forest(data_val, label_metadata, False)
+        print("x_val_rfc shape: ", x_val_rfc.shape)
 
-            # heuristic: if the classifier predicts a keyword we assume that no other keyword follows for at least 1s
-            SKIP_SAMPLES = 44 * 2
-            word_predicted = False
-            i = 0
-            # run random forest on validation data, but only 44 samples at a time
-            while i < x_val_rfc.shape[1]:
-                prediction_data = x_val_rfc[:, i:i + 44]
+        # heuristic: if the classifier predicts a keyword we assume that no other keyword follows for at least 1s
+        SKIP_SAMPLES = 44 * 2
+        word_predicted = False
+        i = 0
+        timestamp = 0
+        predictions_rfc = None
+        # run random forest on validation data, but only 44 samples at a time
+        while i < x_val_rfc.shape[1]:
+            prediction_data = x_val_rfc[:, i:i + 44]
 
-                if np.shape(prediction_data)[1] == 44:
-                    predictions_rfc = rfc.predict(prediction_data)
-                    if predictions_rfc != ['18']:
-                        print(f"Predicting for samples {i} to {i + 44}")
-                        print("Predictions: ", label_map_reverted[int(predictions_rfc[0])])
-                        word_predicted = True
-                        base_filename = os.path.splitext(file_name)[0]
-                        timestamp = i * 0.025
-                        results.append((base_filename, label_map_reverted[int(predictions_rfc[0])], round(timestamp, 3)))
+            if np.shape(prediction_data)[1] == 44:
+                predictions_rfc = rfc.predict(prediction_data)
+                if predictions_rfc != ['18']:
+                    # print(f"Predicting for samples {i} to {i + 44}")
+                    # print("Predictions: ", label_map_reverted[int(predictions_rfc[0])])
+                    word_predicted = True
+                    timestamp = i * 0.025
 
-                # if word was predicted, advance loop without prediction
-                if word_predicted and i + SKIP_SAMPLES + 44 < x_val_rfc.shape[1]:
-                    # heuristic: if a word is recognized a command must follow in the next 1.1 seconds
-                    for j in range(i, i + SKIP_SAMPLES):
-                        predictions_crfc = crfc.predict(x_val_rfc[:, j:j + 44])
-                        if predictions_crfc != ['18']:
-                            print(f"Predicting for samples {j} to {j + 44}")
-                            print("Predictions: ", label_map_reverted[int(predictions_crfc[0])])
-                            break
+            # if word was predicted, advance loop without prediction
+            if word_predicted and i + SKIP_SAMPLES + 44 < x_val_rfc.shape[1]:
+                # heuristic: if a word is recognized a command must follow in the next 1.1 seconds
+                for j in range(i, i + SKIP_SAMPLES):
+                    predictions_crfc = crfc.predict(x_val_rfc[:, j:j + 44])
+                    if predictions_crfc != ['18']:
+                        print(f"Predicting for samples {j} to {j + 44}")
+                        print(f"Predictions: {label_map_reverted[int(predictions_rfc[0])]} {label_map_reverted[int(predictions_crfc[0])]}")
+                        # append command to result only if a full command has been recognized
+                        r = (base_filename, label_map_reverted[int(predictions_rfc[0])],
+                             label_map_reverted[int(predictions_crfc[0])], round(timestamp, 3))
+                        results.append(r)
+                        break
 
-                if word_predicted:
-                    i += SKIP_SAMPLES
-                    word_predicted = False
+            if word_predicted:
+                i += SKIP_SAMPLES
+                word_predicted = False
 
-                i += 1
+            i += 1
 
     with open('results.csv', mode='w', newline='') as file:
         writer = csv.writer(file)
@@ -295,4 +257,5 @@ def validate_and_export_predictions():
     print("Results written to results.csv")
 
 
-validate_and_export_predictions()
+if validate_random_forest:
+    validate_and_export_predictions()
