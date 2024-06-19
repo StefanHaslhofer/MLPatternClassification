@@ -229,7 +229,8 @@ def validate_and_export_predictions():
 
     results = []
 
-    for file_name in file_names:print(f"Filename: {file_name}")
+    for file_name in file_names:
+        print(f"Filename: {file_name}")
         try:
             data_val = np.load(f'{development_scenes_path}/{file_name}')
             np.transpose(data_val)
