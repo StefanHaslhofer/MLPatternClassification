@@ -182,7 +182,7 @@ if (train_command_random_forest):
 
 def validate_and_export_predictions():
     # Define the directory path
-    development_scenes_path = 'development_scenes_npy/development_scenes'
+    development_scenes_path = 'test_scenes_npy/test_scenes'
     file_names = os.listdir(development_scenes_path)
 
     results = []
@@ -223,7 +223,9 @@ def validate_and_export_predictions():
 
             if np.shape(prediction_data)[1] == 44:
                 predictions_rfc = rfc.predict(prediction_data)
-                if predictions_rfc != ['18']:
+                if predictions_rfc == ['0'] or predictions_rfc == ['2'] or predictions_rfc == [
+                    '4'] or predictions_rfc == ['6'] or predictions_rfc == ['7'] or predictions_rfc == [
+                    '8'] or predictions_rfc == ['9'] or predictions_rfc == ['12']:
                     # print(f"Predicting for samples {i} to {i + 44}")
                     # print("Predictions: ", label_map_reverted[int(predictions_rfc[0])])
                     word_predicted = True
@@ -232,7 +234,9 @@ def validate_and_export_predictions():
                 if word_predicted:
                     if i + INIT_SKIP + 44 < x_val_rfc.shape[1]:
                         predictions_rfc = rfc.predict(x_val_rfc[:, i + INIT_SKIP:i + INIT_SKIP + 44])
-                        if predictions_rfc != ['18']:
+                        if predictions_rfc == ['0'] or predictions_rfc == ['2'] or predictions_rfc == [
+                            '4'] or predictions_rfc == ['6'] or predictions_rfc == ['7'] or predictions_rfc == [
+                            '8'] or predictions_rfc == ['9'] or predictions_rfc == ['12']:
                             word_predicted = True
                             timestamp = (i + INIT_SKIP) * 0.025
                         else:
@@ -247,7 +251,8 @@ def validate_and_export_predictions():
                     predictions_crfc = crfc.predict(x_val_rfc[:, j:j + 44])
                     if predictions_crfc != ['18']:
                         print(f"Predicting for samples {j} to {j + 44}")
-                        print(f"Predictions: {label_map_reverted[int(predictions_rfc[0])]} {label_map_reverted[int(predictions_crfc[0])]}")
+                        print(
+                            f"Predictions: {label_map_reverted[int(predictions_rfc[0])]} {label_map_reverted[int(predictions_crfc[0])]}")
                         # append command to result only if a full command has been recognized
                         r = (base_filename, label_map_reverted[int(predictions_rfc[0])],
                              label_map_reverted[int(predictions_crfc[0])], round(timestamp, 3))
@@ -260,7 +265,7 @@ def validate_and_export_predictions():
 
             i += 1
 
-    with open('results.csv', mode='w', newline='') as file:
+    with open('predictions.csv', mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(["filename", "command", "timestamp"])
         for result in results:
