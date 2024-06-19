@@ -1,5 +1,7 @@
 import csv
 import joblib
+=========
+>>>>>>>>> Temporary merge branch 2
 import joblib
 import numpy as np
 import sklearn
@@ -10,18 +12,20 @@ from sklearn.metrics import accuracy_score, classification_report
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
 import os
-import pandas as pd
 
 from helpers import plot_spectrogram, calc_deltas, flatten_data_by_mean, normalize_data, get_data_for_speakers, \
-    get_label_map,add_white_noise,add_time_stretch,pitch_shifting
+    get_label_map, filter_by_label,add_white_noise,add_time_stretch,pitch_shifting
+
+import helpers
 
 # TODO set to True to show graphs
 show_sample_graphs = False
 show_scatter_plot = False
 train_dummy = False
-train_random_forest = True
-validate_random_forest = False
-train_with_augmented_data = False
+train_random_forest = False
+train_command_random_forest = False
+validate_random_forest = True
+train_with_augmented_data = True
 
 # load from data files provided on moodle
 try:
@@ -31,7 +35,6 @@ try:
 except Exception as e:
     print(f"Failed to load data: {e}")
     raise
-
 # Initialize the LabelEncoder
 le = LabelEncoder()
 
@@ -49,6 +52,48 @@ np.random.shuffle(speaker_ids)
 speaker_splits_ids = np.array_split(speaker_ids, n)
 
 
+def calc_deltas(data):
+    """
+    calculate the change (delta) of the frequency energy over time
+    """
+    deltas = np.diff(data, axis=2)
+    # trailing_zeros = np.zeros(shape=(deltas.shape[0] ,deltas.shape[1], 1))
+    # deltas = np.concatenate((deltas, trailing_zeros), axis=2)
+    # return np.append(data, deltas, axis=1)
+    return deltas
+
+
+def setup_knn(data):
+    # only use mfcc (also cut away mfcc bin 0 and upper bins)
+    reduced_feature_data = data[:, 13:60]
+    print("reduced feature data shape: ", reduced_feature_data.shape)
+    # delta_features = append_deltas(reduced_feature_data)
+    # calculate mean for each frame (along axis 1)
+    flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
+    print("flattened data shape: ", flattened_data.shape)
+    # don't normalize spectrograms
+    # normalized_data = normalize_data(data)
+    # print("data normalized: ", normalized_data.shape)
+
+    recording_folds = []
+    for fold_idx, fold in enumerate(speaker_splits_ids):
+        print(f"Retrieving data for fold {fold_idx + 1}/{n}")
+        fold_data, fold_labels = get_data_for_speakers(fold, label_metadata, flattened_data)
+        recording_folds.append({'data': fold_data, 'labels': fold_labels})
+        print(f"Retrieved {len(fold_data)} samples with labels.")
+
+    return recording_folds
+
+
+
+#recording_folds = setup_knn(data)
+
+"""
+Set up SVM
+"""
+
+
+# Append the labels to the data, assume that the labels are in the same order as the data
 def append_labels(data, labels):
     labels_2d = labels.reshape(-1, 1)
     if data.shape[0] != labels_2d.shape[0]:
@@ -76,9 +121,9 @@ if show_sample_graphs:
 
 def dummy_cls(data):
     reduced_feature_data = data[:, 13:60]
-    print("reduced feature data shape: ", reduced_feature_data.shape)
+    # print("reduced feature data shape: ", reduced_feature_data.shape)
     flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
-    print("flattened data shape: ", flattened_data.shape)
+    # print("flattened data shape: ", flattened_data.shape)
     normalized_data = normalize_data(flattened_data)
 
     X_train, X_test, y_train, y_test = train_test_split(normalized_data, label_metadata['word'], test_size=0.2,
@@ -102,11 +147,13 @@ if train_dummy:
 RSEED = 10
 
 
-def setup_random_forest(data, isTraining):
+def setup_random_forest(data, label_metadata, isTraining):
     reduced_feature_data = data[:, 13:60]
-    print("reduced feature data shape: ", reduced_feature_data.shape)
+    if isTraining:
+        print("reduced feature data shape: ", reduced_feature_data.shape)
     flattened_data = flatten_data_by_mean(reduced_feature_data, 1)
-    print("flattened data shape: ", flattened_data.shape)
+    if isTraining:
+        print("flattened data shape: ", flattened_data.shape)
 
     if isTraining:
         speaker_train = speaker_ids[:int(speaker_ids.size * 0.8)]
@@ -115,29 +162,29 @@ def setup_random_forest(data, isTraining):
         x_train, y_train = get_data_for_speakers(speaker_train, label_metadata, flattened_data)
         x_test, y_test = get_data_for_speakers(speaker_test, label_metadata, flattened_data)
 
-        if(train_with_augmented_data):
+
             #Get speakers for augmented data
+        if (train_with_augmented_data):
+            # Get speakers for augmented data
             speaker_train_wn = speaker_ids[0:25]
             speaker_train_pitch = speaker_ids[25:45]
-           # speaker_train_stretch = speaker_ids[31:45]
+            # speaker_train_stretch = speaker_ids[31:45]
 
             x_train_wn, y_train_wn = get_data_for_speakers(speaker_train_wn, label_metadata, flattened_data)
-            x_train_wn = add_white_noise(x_train_wn,0.5)
+            x_train_wn = add_white_noise(x_train_wn, 0.5)
 
+            x_train_pitch, y_train_pitch = get_data_for_speakers(speaker_train_pitch, label_metadata, flattened_data)
+            x_train_pitch = pitch_shifting(x_train_pitch, 16000, -4)
 
-
-            x_train_pitch,y_train_pitch = get_data_for_speakers(speaker_train_pitch,label_metadata,flattened_data)
-            x_train_pitch = pitch_shifting(x_train_pitch,16000,-4)
-
-           # x_train_stretch, y_train_stretch = get_data_for_speakers(speaker_train_stretch, label_metadata, flattened_data)
-            #x_train_stretch = add_time_stretch(x_train_stretch, 2)
+            # x_train_stretch, y_train_stretch = get_data_for_speakers(speaker_train_stretch, label_metadata, flattened_data)
+            # x_train_stretch = add_time_stretch(x_train_stretch, 2)
 
 
             print(x_train_wn.shape)
 
             print(y_train_wn.shape)
 
-            #y= pd.DataFrame(x_train_pitch)
+            # y= pd.DataFrame(x_train_pitch)
             print(x_train_pitch.shape)
 
             print(f"Speaker ids training size : {speaker_train.size}")
@@ -149,11 +196,18 @@ def setup_random_forest(data, isTraining):
             print(f"y pitch noise train label : {y_train_pitch}")
 
             print(x_train.shape)
-            x_train = np.vstack((x_train,x_train_wn,x_train_pitch))
-            y_train = np.hstack((y_train,y_train_pitch,y_train_wn))
+            x_train = np.vstack((x_train, x_train_wn, x_train_pitch))
+            y_train = np.hstack((y_train, y_train_pitch, y_train_wn))
             print(x_train.shape)
 
-        return x_train, y_train, x_test, y_test
+            return x_train, y_train, x_test, y_test
+        else:
+            speaker_train = speaker_ids[:int(speaker_ids.size * 0.8)]
+            speaker_test = speaker_ids[int(speaker_ids.size * 0.8):]
+            x_train, y_train = get_data_for_speakers(speaker_train, label_metadata, flattened_data)
+            x_test, y_test = get_data_for_speakers(speaker_test, label_metadata, flattened_data)
+            return x_train, y_train, x_test, y_test
+
     else:
         return flattened_data
 
@@ -174,7 +228,7 @@ def evaluate_model(y_test, predictions):
 
 
 if train_random_forest:
-    x_train, y_train, x_test, y_test = setup_random_forest(data, train_random_forest)
+    x_train, y_train, x_test, y_test = setup_random_forest(data, label_metadata, train_random_forest)
 
     # Define hyperparameter grid
     hyperparams_grid = [
@@ -223,48 +277,72 @@ def validate_and_export_predictions():
     development_scenes_path = 'development_scenes_npy/development_scenes'
     file_names = os.listdir(development_scenes_path)
 
-for file_name in file_names:
-    try: # change filename to test different files
-        data_val = np.load(f'{development_scenes_path}/{file_name}')
+    results = []
 
-        np.transpose(data_val)
-        data_val = np.expand_dims(data_val, axis=0)
-        if show_sample_graphs:
-            plot_spectrogram(data_val[0][13:75], 'mfcc-spectrogram', ['x', 'y', 'z', 'Verena_Staubsauger_an_Alarm_an'])
-    except Exception as e:
-        print(f"Failed to load data: {e}")
-        raise
+    for file_name in file_names:
+        print(f"Filename: {file_name}")
+        try:
+            data_val = np.load(f'{development_scenes_path}/{file_name}')
+            np.transpose(data_val)
+            data_val = np.expand_dims(data_val, axis=0)
+            if show_sample_graphs:
+                plot_spectrogram(data_val[0][13:75], 'mfcc-spectrogram', ['x', 'y', 'z', file_name])
+        except Exception as e:
+            print(f"Failed to load data: {e}")
+            raise
 
-    print("Loaded validation data, with shape: ", data_val.shape)
-    rfc = joblib.load("random_forest_model_best.pkl")
+        #print("Loaded validation data, with shape: ", data_val.shape)
+        rfc = joblib.load("random_forest_model_best.pkl")
+        crfc = joblib.load("command_random_forest_model.pkl")
 
         label_map = get_label_map(le)
         label_map_reverted = {v: k for k, v in label_map.items()}
 
-    if validate_random_forest:
+        if validate_random_forest:
+            x_val_rfc = setup_random_forest(data_val, label_metadata,False)
+            print("x_val_rfc shape: ", x_val_rfc.shape)
 
-        x_val_rfc = setup_random_forest(data_val, False)
-        print("x_val_rfc shape: ", x_val_rfc.shape)
+            # heuristic: if the classifier predicts a keyword we assume that no other keyword follows for at least 1s
+            SKIP_SAMPLES = 44 * 2
+            word_predicted = False
+            i = 0
+            # run random forest on validation data, but only 44 samples at a time
+            while i < x_val_rfc.shape[1]:
+                prediction_data = x_val_rfc[:, i:i + 44]
 
-        # TODO iterate over x_val_rfc
-        # heuristic: if the classifier predicts a keyword we assume that no other keyword follows for at least 1s
-        SKIP_SAMPLES = 44
-        word_predicted = False
-        i = 0
-        # run random forest on validation data, but only 44 samples at a time
-        while i < x_val_rfc.shape[1]:
-            prediction_data = x_val_rfc[:, i:i + 44]
-            if np.shape(prediction_data)[1] == 44:
-                predictions_rfc = rfc.predict(prediction_data)
-                if predictions_rfc != ['18']:
-                    print(f"Predicting for samples {i} to {i + 44}")
-                    print("Predictions: ", label_map_reverted[int(predictions_rfc[0])])
-                    word_predicted = True
-            # if word was predicted, advance loop without prediction
-            if word_predicted and i + SKIP_SAMPLES <= x_val_rfc.shape[1]:
-                i += SKIP_SAMPLES
-                word_predicted = False
-            i += 1
+                if np.shape(prediction_data)[1] == 44:
+                    predictions_rfc = rfc.predict(prediction_data)
+                    if predictions_rfc != ['18']:
+                        print(f"Predicting for samples {i} to {i + 44}")
+                        print("Predictions: ", label_map_reverted[int(predictions_rfc[0])])
+                        word_predicted = True
+                        base_filename = os.path.splitext(file_name)[0]
+                        timestamp = i * 0.025
+                        results.append((base_filename, label_map_reverted[int(predictions_rfc[0])], round(timestamp, 3)))
+
+                # if word was predicted, advance loop without prediction
+                if word_predicted and i + SKIP_SAMPLES + 44 < x_val_rfc.shape[1]:
+                    # heuristic: if a word is recognized a command must follow in the next 1.1 seconds
+                    for j in range(i, i + SKIP_SAMPLES):
+                        predictions_crfc = crfc.predict(x_val_rfc[:, j:j + 44])
+                        if predictions_crfc != ['18']:
+                            print(f"Predicting for samples {j} to {j + 44}")
+                            print("Predictions: ", label_map_reverted[int(predictions_crfc[0])])
+                            break
+
+                if word_predicted:
+                    i += SKIP_SAMPLES
+                    word_predicted = False
+
+                i += 1
+
+    with open('results.csv', mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["filename", "command", "timestamp"])
+        for result in results:
+            writer.writerow(result)
+
+    print("Results written to results.csv")
 
 
-# TODO export to csv
+validate_and_export_predictions()
