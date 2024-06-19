@@ -212,6 +212,7 @@ def validate_and_export_predictions():
 
         # heuristic: if the classifier predicts a keyword we assume that no other keyword follows for at least 1s
         SKIP_SAMPLES = 44 * 2
+        INIT_SKIP = 10
         word_predicted = False
         i = 0
         timestamp = 0
@@ -226,7 +227,18 @@ def validate_and_export_predictions():
                     # print(f"Predicting for samples {i} to {i + 44}")
                     # print("Predictions: ", label_map_reverted[int(predictions_rfc[0])])
                     word_predicted = True
-                    timestamp = i * 0.025
+
+                # heuristic -> skip 10 frames (initial threshold) to overlap window with word
+                if word_predicted:
+                    if i + INIT_SKIP + 44 < x_val_rfc.shape[1]:
+                        predictions_rfc = rfc.predict(x_val_rfc[:, i + INIT_SKIP:i + INIT_SKIP + 44])
+                        if predictions_rfc != ['18']:
+                            word_predicted = True
+                            timestamp = i * 0.025
+                        else:
+                            word_predicted = False
+                    else:
+                        word_predicted = False
 
             # if word was predicted, advance loop without prediction
             if word_predicted and i + SKIP_SAMPLES + 44 < x_val_rfc.shape[1]:
