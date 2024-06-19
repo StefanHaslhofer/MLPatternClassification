@@ -23,6 +23,7 @@ train_dummy = False
 train_random_forest = False
 train_command_random_forest = False
 validate_random_forest = True
+train_with_augmented_data = True
 
 # load from data files provided on moodle
 try:
@@ -152,11 +153,48 @@ def setup_random_forest(data, label_metadata, isTraining):
         print("flattened data shape: ", flattened_data.shape)
 
     if isTraining:
-        speaker_train = speaker_ids[:int(speaker_ids.size * 0.8)]
-        speaker_test = speaker_ids[int(speaker_ids.size * 0.8):]
-        x_train, y_train = get_data_for_speakers(speaker_train, label_metadata, flattened_data)
-        x_test, y_test = get_data_for_speakers(speaker_test, label_metadata, flattened_data)
-        return x_train, y_train, x_test, y_test
+        if (train_with_augmented_data):
+            # Get speakers for augmented data
+            speaker_train_wn = speaker_ids[0:25]
+            speaker_train_pitch = speaker_ids[25:45]
+            # speaker_train_stretch = speaker_ids[31:45]
+
+            x_train_wn, y_train_wn = get_data_for_speakers(speaker_train_wn, label_metadata, flattened_data)
+            x_train_wn = add_white_noise(x_train_wn, 0.5)
+
+            x_train_pitch, y_train_pitch = get_data_for_speakers(speaker_train_pitch, label_metadata, flattened_data)
+            x_train_pitch = pitch_shifting(x_train_pitch, 16000, -4)
+
+            # x_train_stretch, y_train_stretch = get_data_for_speakers(speaker_train_stretch, label_metadata, flattened_data)
+            # x_train_stretch = add_time_stretch(x_train_stretch, 2)
+
+            print(x_train_wn.shape)
+
+            print(y_train_wn.shape)
+
+            # y= pd.DataFrame(x_train_pitch)
+            print(x_train_pitch.shape)
+
+            print(f"Speaker ids training size : {speaker_train.size}")
+            print(f"Speaker ids augmentation  size: {speaker_train_wn.size + speaker_train_pitch.size}")
+            print(f"x white noise train shape : {x_train_wn.shape}")
+            print(f"y white noise train label shape: {y_train_wn.shape}")
+            print(f"x pitch noise train shape : {x_train_pitch.shape}")
+            print(f"y pitch noise train label shape: {y_train_pitch.shape}")
+            print(f"y pitch noise train label : {y_train_pitch}")
+
+            print(x_train.shape)
+            x_train = np.vstack((x_train, x_train_wn, x_train_pitch))
+            y_train = np.hstack((y_train, y_train_pitch, y_train_wn))
+            print(x_train.shape)
+
+            return x_train, y_train, x_test, y_test
+        else:
+            speaker_train = speaker_ids[:int(speaker_ids.size * 0.8)]
+            speaker_test = speaker_ids[int(speaker_ids.size * 0.8):]
+            x_train, y_train = get_data_for_speakers(speaker_train, label_metadata, flattened_data)
+            x_test, y_test = get_data_for_speakers(speaker_test, label_metadata, flattened_data)
+            return x_train, y_train, x_test, y_test
 
     else:
         return flattened_data
