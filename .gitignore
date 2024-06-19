@@ -4,6 +4,7 @@ MLPC24_speech_commands_raw_waveforms/
 validation_data/
 development_scenes_npy/
 mlpc24_speech_commands/
+test_scenes_npy/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
