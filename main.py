@@ -192,20 +192,8 @@ if train_random_forest:
     best_accuracy = 0
     best_params = None
 
-if (train_command_random_forest):
-    command_data = filter_by_label(['13', '14', '18'], label_metadata, data)
-    x_train, y_train, x_test, y_test = setup_random_forest(command_data[0], command_data[1],
-                                                           train_command_random_forest)
-    model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED)
-    # error_train = mean_zero_one_loss(y_train, predictions)
-    error_test = mean_zero_one_loss(y_test, predictions)
-    print(f"command random forest error: {error_test}")
-
-    # save model
-    joblib.dump(model, "command_random_forest_model.pkl")
-
-# validate the models with new data in the validation folder, which contains 5 separate .npy files
-# load from data files provided on moodle
+    # validate the models with new data in the validation folder, which contains 5 separate .npy files
+    # load from data files provided on moodle
     for params in hyperparams_grid:
         print(f"Testing parameters: {params}")
         model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED, params)
@@ -221,6 +209,18 @@ if (train_command_random_forest):
     # Save the best model
     model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED, best_params)
     joblib.dump(model, "random_forest_model_best.pkl")
+
+if (train_command_random_forest):
+    command_data = filter_by_label(['13', '14', '18'], label_metadata, data)
+    x_train, y_train, x_test, y_test = setup_random_forest(command_data[0], command_data[1],
+                                                           train_command_random_forest)
+    model, predictions = fit_predict(x_train, y_train, x_test, y_test, RSEED)
+    # error_train = mean_zero_one_loss(y_train, predictions)
+    error_test = mean_zero_one_loss(y_test, predictions)
+    print(f"command random forest error: {error_test}")
+
+    # save model
+    joblib.dump(model, "command_random_forest_model.pkl")
 
 def validate_and_export_predictions():
     # Define the directory path
