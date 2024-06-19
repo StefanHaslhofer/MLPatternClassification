@@ -234,7 +234,7 @@ def validate_and_export_predictions():
                         predictions_rfc = rfc.predict(x_val_rfc[:, i + INIT_SKIP:i + INIT_SKIP + 44])
                         if predictions_rfc != ['18']:
                             word_predicted = True
-                            timestamp = i * 0.025
+                            timestamp = (i + INIT_SKIP) * 0.025
                         else:
                             word_predicted = False
                     else:
