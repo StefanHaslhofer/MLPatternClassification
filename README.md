@@ -15,4 +15,5 @@
     ```
 # 1) Get the training data
 
-#2)
+#2) Try different models to classify speech commands
+#3) Try to optimize the different models accuracy using different optimization methods
